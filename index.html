@@ -99,6 +99,21 @@
                 <h2 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Stream Settings</h2>
                 
                 <div class="space-y-5">
+                    <!-- Resolution -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Target Resolution</label>
+                        <div class="relative">
+                            <select id="resolutionSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
+                                <option value="720">HD (720p)</option>
+                                <option value="1080" selected>Full HD (1080p)</option>
+                                <option value="1440">2K (1440p)</option>
+                                <option value="2160">4K (2160p)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
+                        </div>
+                        <p class="text-[10px] text-gray-600 mt-1">Downscales stream if source is larger.</p>
+                    </div>
+
                     <!-- Bandwidth Limit -->
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Max Bandwidth</label>
@@ -208,6 +223,7 @@
         const bandwidthDisplay = document.getElementById('bandwidthDisplay');
         const micToggle = document.getElementById('micToggle');
         const bandwidthSelect = document.getElementById('bandwidthSelect');
+        const resolutionSelect = document.getElementById('resolutionSelect');
 
         // --- State ---
         let peer = null;
@@ -309,11 +325,12 @@
         }
 
         async function getMediaStream() {
+            const targetHeight = parseInt(resolutionSelect.value);
+            
             // Screen Capture
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
-                    width: { ideal: 1920, max: 3840 },
-                    height: { ideal: 1080, max: 2160 },
+                    height: { ideal: targetHeight, max: targetHeight }, // Force target resolution
                     frameRate: { ideal: 60 }
                 },
                 audio: true // System Audio
