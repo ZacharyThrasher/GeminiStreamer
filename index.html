@@ -26,6 +26,11 @@
             pointer-events: none;
             z-index: 10;
         }
+        /* Lobby Overlay */
+        .lobby-backdrop {
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden font-sans selection:bg-purple-500 selection:text-white">
@@ -55,8 +60,58 @@
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 overflow-hidden">
+    <main class="flex-1 container mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 overflow-hidden relative">
         
+        <!-- Viewer Lobby Overlay -->
+        <div id="viewerLobby" class="hidden absolute inset-0 z-50 lobby-backdrop flex items-center justify-center p-4">
+            <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+                <div class="w-20 h-20 bg-gray-800 rounded-full mx-auto flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-play text-3xl text-indigo-400 ml-1"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Join Broadcast</h2>
+                <p class="text-gray-400 text-sm mb-8">Select your preferred streaming quality based on your internet speed.</p>
+                
+                <div class="space-y-4 text-left">
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Quality</label>
+                    
+                    <div class="grid grid-cols-1 gap-3">
+                        <button onclick="connectWithQuality('source')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-indigo-500 hover:bg-gray-750 transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-900/30 flex items-center justify-center text-indigo-400 mr-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                <i class="fa-solid fa-bolt"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-sm font-bold text-white">Source (Max)</h3>
+                                <p class="text-xs text-gray-400">Direct stream. High bandwidth required.</p>
+                            </div>
+                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-indigo-500 group-hover:bg-indigo-500"></div>
+                        </button>
+
+                        <button onclick="connectWithQuality('balanced')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-blue-500 hover:bg-gray-750 transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400 mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                <i class="fa-solid fa-scale-balanced"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-sm font-bold text-white">Balanced (HD)</h3>
+                                <p class="text-xs text-gray-400">720p/1080p compressed (~2.5 Mbps)</p>
+                            </div>
+                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-blue-500 group-hover:bg-blue-500"></div>
+                        </button>
+
+                        <button onclick="connectWithQuality('low')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-green-500 hover:bg-gray-750 transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-green-900/30 flex items-center justify-center text-green-400 mr-4 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                                <i class="fa-solid fa-signal"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-sm font-bold text-white">Low Bandwidth</h3>
+                                <p class="text-xs text-gray-400">480p equivalent (~1 Mbps). Best for mobile.</p>
+                            </div>
+                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-green-500 group-hover:bg-green-500"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Left Panel: Controls (Hidden in Viewer Mode) -->
         <div id="controlPanel" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto pb-4 transition-all duration-500">
             
@@ -101,7 +156,7 @@
                 <div class="space-y-5">
                     <!-- Resolution -->
                     <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Target Resolution</label>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Resolution (Source)</label>
                         <div class="relative">
                             <select id="resolutionSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
                                 <option value="720">HD (720p)</option>
@@ -111,24 +166,20 @@
                             </select>
                             <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
                         </div>
-                        <p class="text-[10px] text-gray-600 mt-1">Downscales stream if source is larger.</p>
                     </div>
 
                     <!-- Bandwidth Limit -->
                     <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Bandwidth</label>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Bandwidth (Source)</label>
                         <div class="relative">
                             <select id="bandwidthSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
-                                <option value="1000">Low (1 Mbps)</option>
-                                <option value="2500">Standard (2.5 Mbps)</option>
-                                <option value="5000" selected>High (5 Mbps)</option>
+                                <option value="5000">High (5 Mbps)</option>
                                 <option value="10000">Ultra (10 Mbps)</option>
                                 <option value="50000">Extreme (50 Mbps)</option>
-                                <option value="500000">Ludicrous (500 Mbps)</option>
+                                <option value="500000" selected>Ludicrous (500 Mbps)</option>
                             </select>
                             <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
                         </div>
-                        <p class="text-[10px] text-gray-600 mt-1">Controls the WebRTC SDP bandwidth limit.</p>
                     </div>
 
                     <!-- Audio -->
@@ -146,11 +197,10 @@
                         </div>
                     </div>
 
-                    <!-- Instructions -->
-                    <div class="bg-blue-900/10 border border-blue-900/30 p-3 rounded-lg">
-                        <p class="text-[11px] text-blue-300 leading-relaxed">
-                            <i class="fa-solid fa-info-circle mr-1"></i>
-                            This runs entirely in your browser. When you start, a P2P ID is generated. Friends connect directly to you. No data goes to a server.
+                    <div class="bg-indigo-900/10 border border-indigo-900/30 p-3 rounded-lg">
+                        <p class="text-[11px] text-indigo-300 leading-relaxed">
+                            <i class="fa-solid fa-microchip mr-1"></i>
+                            <strong>High Performance Mode:</strong> Your PC will transcode specific streams for each viewer based on their selection. High CPU/GPU usage expected.
                         </p>
                     </div>
                 </div>
@@ -177,19 +227,19 @@
                     <p class="text-sm opacity-50 mt-2">Waiting for source...</p>
                 </div>
 
-                <!-- Overlay Info (Resolution/Bitrate) -->
+                <!-- Overlay Info -->
                 <div id="videoOverlay" class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md text-xs font-mono text-green-400 hidden z-20 flex items-center gap-3">
                     <div class="flex items-center gap-1">
                         <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
                         <span class="font-bold text-white tracking-wider">LIVE</span>
                     </div>
                     <span class="text-gray-500">|</span>
-                    <span id="resDisplay">1920x1080</span>
+                    <span id="resDisplay">1080p</span>
                     <span class="text-gray-500">|</span>
-                    <span id="bandwidthDisplay">5 Mbps</span>
+                    <span id="qualityTag">Source</span>
                 </div>
 
-                <!-- Viewer Message (Only visible to viewers) -->
+                <!-- Viewer Message -->
                 <div id="viewerMessage" class="absolute bottom-10 bg-indigo-600/90 text-white px-6 py-3 rounded-full font-bold shadow-lg transform translate-y-20 transition-transform duration-500 hidden z-30">
                     Connected to Stream
                 </div>
@@ -200,9 +250,7 @@
     <script>
         // --- Configuration ---
         const PEER_CONFIG = {
-            debug: 2
-            // No custom ICE servers defined, using PeerJS defaults (Google STUN)
-            // For production/enterprise, you'd add TURN servers here.
+            debug: 1 // Reduced debug noise
         };
 
         // --- DOM Elements ---
@@ -211,6 +259,7 @@
         const mainVideo = document.getElementById('mainVideo');
         const placeholder = document.getElementById('placeholder');
         const controlPanel = document.getElementById('controlPanel');
+        const viewerLobby = document.getElementById('viewerLobby');
         const statusBadge = document.getElementById('statusBadge');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -220,7 +269,7 @@
         const viewerCountEl = document.querySelector('#viewerCount b');
         const videoOverlay = document.getElementById('videoOverlay');
         const resDisplay = document.getElementById('resDisplay');
-        const bandwidthDisplay = document.getElementById('bandwidthDisplay');
+        const qualityTag = document.getElementById('qualityTag');
         const micToggle = document.getElementById('micToggle');
         const bandwidthSelect = document.getElementById('bandwidthSelect');
         const resolutionSelect = document.getElementById('resolutionSelect');
@@ -230,17 +279,17 @@
         let myStream = null;
         let audioContext = null;
         let audioDestination = null;
-        let connections = []; // Track connected viewers
+        let connections = [];
         let isHost = true;
+        let targetHostId = null;
 
         // --- Initialization ---
-        
-        // 1. Check URL parameters to see if we are a HOST or a VIEWER
         const urlParams = new URLSearchParams(window.location.search);
         const hostIdToConnect = urlParams.get('watch');
 
         if (hostIdToConnect) {
-            initViewerMode(hostIdToConnect);
+            targetHostId = hostIdToConnect;
+            initLobbyMode();
         } else {
             initHostMode();
         }
@@ -250,26 +299,23 @@
         function initHostMode() {
             isHost = true;
             
-            // Initialize Peer only when user clicks Start to save resources/avoid ID spam
             startBtn.addEventListener('click', async () => {
                 startBtn.disabled = true;
                 startBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Initializing...';
 
                 try {
-                    // 1. Get Media (Screen + Mic)
                     myStream = await getMediaStream();
                     
-                    // 2. Show Preview
                     mainVideo.srcObject = myStream;
-                    mainVideo.muted = true; // Host mutes themselves locally
+                    mainVideo.muted = true;
                     placeholder.classList.add('hidden');
                     videoOverlay.classList.remove('hidden');
+                    qualityTag.innerText = "Host (Source)";
                     
-                    // 3. Connect to PeerJS Server
                     peer = new Peer(generateRandomId(), PEER_CONFIG);
 
                     peer.on('open', (id) => {
-                        console.log('My Peer ID is: ' + id);
+                        console.log('Host ID:', id);
                         updateStatus('Broadcasting', 'red');
                         enableLiveUI(id);
                         setupHostEvents();
@@ -282,7 +328,7 @@
                     });
 
                 } catch (err) {
-                    console.error("Failed to start stream:", err);
+                    console.error("Start Error:", err);
                     alert("Could not start capture: " + err.message);
                     resetUI();
                 }
@@ -292,23 +338,31 @@
         }
 
         function setupHostEvents() {
-            // Handle incoming calls (Viewers connecting)
             peer.on('call', (call) => {
-                console.log("Incoming viewer connection...");
+                console.log("Incoming connection:", call.metadata);
                 
-                // Answer the call with our A/V stream
-                // We apply bandwidth SDP munging here if possible
+                // Read requested quality from metadata
+                const requestedQuality = call.metadata?.quality || 'source';
+                const bitrate = getBitrateForQuality(requestedQuality);
+
+                // SDP Munging Logic:
+                // We modify the SDP (Session Description Protocol) to force a max bitrate
+                // specifically for this connection.
                 const options = {
                     sdpTransform: (sdp) => {
-                        // Very basic SDP hacking to suggest bandwidth
-                        const bandwidth = bandwidthSelect.value;
-                        return sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:' + bandwidth + '\r\n');
+                        // This regex looks for the video media section and appends/replaces the bandwidth limit
+                        // b=AS:<bitrate in kbps>
+                        if (sdp.indexOf('b=AS:') > -1) {
+                            return sdp.replace(/b=AS:\d+/, `b=AS:${bitrate}`);
+                        } else {
+                            return sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\nb=AS:${bitrate}\r\n`);
+                        }
                     }
                 };
 
+                console.log(`Answering connection with ${requestedQuality} profile (${bitrate} kbps)`);
                 call.answer(myStream, options);
                 
-                // Track connection
                 connections.push(call);
                 updateViewerCount();
 
@@ -324,27 +378,33 @@
             });
         }
 
+        function getBitrateForQuality(quality) {
+            // Returns kbps
+            switch(quality) {
+                case 'low': return 1000; // 1 Mbps
+                case 'balanced': return 2500; // 2.5 Mbps
+                case 'source': 
+                default:
+                    return parseInt(bandwidthSelect.value) / 1000; // User defined max
+            }
+        }
+
         async function getMediaStream() {
             const targetHeight = parseInt(resolutionSelect.value);
             
-            // Screen Capture
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
-                    height: { ideal: targetHeight, max: targetHeight }, // Force target resolution
+                    height: { ideal: targetHeight },
                     frameRate: { ideal: 60 }
                 },
-                audio: true // System Audio
+                audio: true 
             });
 
-            // Update Resolution Display
             const settings = displayStream.getVideoTracks()[0].getSettings();
             if(settings.width) resDisplay.innerText = `${settings.width}x${settings.height}`;
-            bandwidthDisplay.innerText = `${parseInt(bandwidthSelect.value)/1000} Mbps`;
 
-            // If mic is off, just return display stream
             if (!micToggle.checked) return displayStream;
 
-            // If mic is on, mix it
             try {
                 const micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -357,106 +417,96 @@
                 audioContext = new AudioContext();
                 audioDestination = audioContext.createMediaStreamDestination();
 
-                // Mix System Audio
                 if (displayStream.getAudioTracks().length > 0) {
                     const sysSource = audioContext.createMediaStreamSource(displayStream);
-                    const sysGain = audioContext.createGain();
-                    sysGain.gain.value = 1.0;
-                    sysSource.connect(sysGain).connect(audioDestination);
+                    sysSource.connect(audioDestination);
                 }
 
-                // Mix Mic Audio
                 const micSource = audioContext.createMediaStreamSource(micStream);
                 const micGain = audioContext.createGain();
-                micGain.gain.value = 1.5; // Slight boost
+                micGain.gain.value = 1.5; 
                 micSource.connect(micGain).connect(audioDestination);
 
-                // Combine
                 return new MediaStream([
                     ...displayStream.getVideoTracks(),
                     ...audioDestination.stream.getAudioTracks()
                 ]);
 
             } catch (e) {
-                console.warn("Mic failed, falling back to system only", e);
+                console.warn("Mic failed", e);
                 return displayStream;
             }
         }
 
         function stopBroadcast() {
-            if (peer) {
-                peer.destroy();
-                peer = null;
-            }
-            if (myStream) {
-                myStream.getTracks().forEach(t => t.stop());
-                myStream = null;
-            }
-            if (audioContext) {
-                audioContext.close();
-            }
+            if (peer) { peer.destroy(); peer = null; }
+            if (myStream) { myStream.getTracks().forEach(t => t.stop()); myStream = null; }
+            if (audioContext) { audioContext.close(); }
             connections = [];
             resetUI();
         }
 
-
         // --- VIEWER MODE LOGIC ---
 
-        function initViewerMode(hostId) {
+        function initLobbyMode() {
             isHost = false;
-            
-            // Hide controls, expand video
-            controlPanel.classList.add('hidden'); // Simplified view for viewer
-            
-            updateStatus('Connecting...', 'yellow');
+            controlPanel.classList.add('hidden');
+            viewerLobby.classList.remove('hidden');
+            updateStatus('Waiting for selection...', 'yellow');
+        }
 
-            peer = new Peer(null, PEER_CONFIG); // We don't need a specific ID
+        // Called by Lobby buttons
+        window.connectWithQuality = function(quality) {
+            viewerLobby.classList.add('hidden');
+            updateStatus('Connecting...', 'yellow');
+            qualityTag.innerText = quality.charAt(0).toUpperCase() + quality.slice(1);
+
+            peer = new Peer(null, PEER_CONFIG);
 
             peer.on('open', (id) => {
-                console.log("Viewer ID: " + id);
-                connectToHost(hostId);
+                console.log("Viewer ID:", id);
+                connectToHost(targetHostId, quality);
             });
 
             peer.on('error', (err) => {
                 alert("Connection Error: " + err.type);
                 updateStatus('Error', 'gray');
+                viewerLobby.classList.remove('hidden'); // Show lobby again on error
             });
         }
 
-        function connectToHost(hostId) {
-            console.log("Calling host: " + hostId);
+        function connectToHost(hostId, quality) {
+            console.log(`Calling host ${hostId} with quality: ${quality}`);
             
-            // Call the host. We send no stream (null) because we are just watching.
-            const call = peer.call(hostId, createEmptyStream());
+            // Pass quality preference in metadata
+            const call = peer.call(hostId, createEmptyStream(), {
+                metadata: { quality: quality }
+            });
 
             call.on('stream', (remoteStream) => {
-                console.log("Stream received!");
                 updateStatus('Live Signal', 'green');
                 
                 mainVideo.srcObject = remoteStream;
-                mainVideo.muted = false; // Viewers want to hear!
-                
-                // Attempt to play (browser autoplay policies might block audio until click)
+                mainVideo.muted = false; 
+                placeholder.classList.add('hidden');
+                videoOverlay.classList.remove('hidden');
+
                 const playPromise = mainVideo.play();
                 if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        // Show a "Click to Play" button if autoplay fails
+                    playPromise.catch(() => {
                         placeholder.innerHTML = '<button class="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold" onclick="mainVideo.play(); this.parentElement.classList.add(\'hidden\')">Click to Start Stream</button>';
                         placeholder.classList.remove('hidden');
                     });
-                } else {
-                    placeholder.classList.add('hidden');
                 }
 
-                // Show connected toast
                 const toast = document.getElementById('viewerMessage');
                 toast.classList.remove('hidden');
                 toast.classList.remove('translate-y-20');
             });
 
             call.on('close', () => {
-                alert("Broadcast ended by host.");
-                location.href = window.location.pathname; // Reload to normal mode
+                alert("Broadcast ended.");
+                location.reload();
             });
             
             call.on('error', (err) => {
@@ -465,7 +515,6 @@
             });
         }
 
-        // Helper to create a dummy stream for the viewer to send (required by some WebRTC implementations)
         function createEmptyStream() {
             const ctx = new AudioContext();
             const osc = ctx.createOscillator();
@@ -473,15 +522,13 @@
             osc.connect(dst);
             osc.start();
             const track = dst.stream.getAudioTracks()[0];
-            track.enabled = false; // Mute it
+            track.enabled = false;
             return new MediaStream([track]);
         }
-
 
         // --- UI UTILS ---
 
         function generateRandomId() {
-            // Generate a readable-ish ID: e.g., stream-xc92-k291
             return 'stream-' + Math.random().toString(36).substr(2, 4) + '-' + Math.random().toString(36).substr(2, 4);
         }
 
@@ -490,7 +537,6 @@
             startBtn.classList.add('animate-pulse');
             stopBtn.disabled = false;
             
-            // Build Share URL
             const url = new URL(window.location.href);
             url.searchParams.set('watch', id);
             shareUrlInput.value = url.toString();
@@ -517,8 +563,6 @@
         function updateStatus(text, color) {
             statusText.innerText = text;
             statusDot.className = `w-2 h-2 rounded-full ${getColorClass(color)}`;
-            
-            // Colors
             statusBadge.className = `flex items-center space-x-2 px-4 py-1.5 rounded-full text-xs font-bold border uppercase tracking-wider transition-colors ${getBadgeClass(color)}`;
         }
 
@@ -536,15 +580,9 @@
             return 'bg-gray-800 text-gray-400 border-gray-700';
         }
 
-        function updateViewerCount() {
-            viewerCountEl.innerText = connections.length;
-        }
-
         copyBtn.addEventListener('click', () => {
             shareUrlInput.select();
-            document.execCommand('copy'); // Fallback for older browsers or iframe contexts
-            // or navigator.clipboard.writeText(shareUrlInput.value);
-            
+            document.execCommand('copy');
             const originalIcon = copyBtn.innerHTML;
             copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
             setTimeout(() => copyBtn.innerHTML = originalIcon, 2000);
