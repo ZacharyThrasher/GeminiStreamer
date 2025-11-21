@@ -31,6 +31,18 @@
             background: rgba(0, 0, 0, 0.95);
             backdrop-filter: blur(10px);
         }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+        }
+        input[type=range]:focus {
+            outline: none; 
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden font-sans selection:bg-purple-500 selection:text-white">
@@ -69,46 +81,42 @@
                     <i class="fa-solid fa-play text-3xl text-indigo-400 ml-1"></i>
                 </div>
                 <h2 class="text-2xl font-bold text-white mb-2">Join Broadcast</h2>
-                <p class="text-gray-400 text-sm mb-8">Select your preferred streaming quality based on your internet speed.</p>
+                <p class="text-gray-400 text-sm mb-8">Adjust the slider to match your internet speed.</p>
                 
-                <div class="space-y-4 text-left">
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Quality</label>
+                <div class="space-y-6 text-left bg-gray-800/50 p-6 rounded-xl border border-gray-700">
                     
-                    <div class="grid grid-cols-1 gap-3">
-                        <button onclick="connectWithQuality('source')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-indigo-500 hover:bg-gray-750 transition-all">
-                            <div class="w-10 h-10 rounded-lg bg-indigo-900/30 flex items-center justify-center text-indigo-400 mr-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                <i class="fa-solid fa-bolt"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h3 class="text-sm font-bold text-white">Source (Max)</h3>
-                                <p class="text-xs text-gray-400">Direct stream. High bandwidth required.</p>
-                            </div>
-                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-indigo-500 group-hover:bg-indigo-500"></div>
-                        </button>
+                    <div class="flex justify-between items-end mb-2">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Target Bitrate</label>
+                        <span id="sliderValueDisplay" class="text-xl font-bold text-indigo-400">2.5 Mbps</span>
+                    </div>
 
-                        <button onclick="connectWithQuality('balanced')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-blue-500 hover:bg-gray-750 transition-all">
-                            <div class="w-10 h-10 rounded-lg bg-blue-900/30 flex items-center justify-center text-blue-400 mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                <i class="fa-solid fa-scale-balanced"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h3 class="text-sm font-bold text-white">Balanced (HD)</h3>
-                                <p class="text-xs text-gray-400">720p/1080p compressed (~2.5 Mbps)</p>
-                            </div>
-                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-blue-500 group-hover:bg-blue-500"></div>
-                        </button>
+                    <!-- Range Slider -->
+                    <div class="relative w-full h-6 flex items-center">
+                        <input type="range" id="bitrateSlider" min="500" max="50000" step="500" value="2500" 
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 z-10 relative">
+                    </div>
+                    
+                    <div class="flex justify-between text-[10px] text-gray-500 font-mono mt-1">
+                        <span>0.5M</span>
+                        <span>10M</span>
+                        <span>25M</span>
+                        <span>50M</span>
+                    </div>
 
-                        <button onclick="connectWithQuality('low')" class="quality-btn group relative flex items-center p-4 cursor-pointer bg-gray-800 border border-gray-700 rounded-xl hover:border-green-500 hover:bg-gray-750 transition-all">
-                            <div class="w-10 h-10 rounded-lg bg-green-900/30 flex items-center justify-center text-green-400 mr-4 group-hover:bg-green-600 group-hover:text-white transition-colors">
-                                <i class="fa-solid fa-signal"></i>
-                            </div>
-                            <div class="flex-1">
-                                <h3 class="text-sm font-bold text-white">Low Bandwidth</h3>
-                                <p class="text-xs text-gray-400">480p equivalent (~1 Mbps). Best for mobile.</p>
-                            </div>
-                            <div class="w-4 h-4 rounded-full border border-gray-600 group-hover:border-green-500 group-hover:bg-green-500"></div>
-                        </button>
+                    <!-- Max Checkbox -->
+                    <div class="mt-4 flex items-center justify-between pt-4 border-t border-gray-700">
+                        <div class="flex items-center">
+                            <input id="maxQualityCheck" type="checkbox" class="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500 focus:ring-2">
+                            <label for="maxQualityCheck" class="ml-2 text-sm font-medium text-gray-300">Source Quality (Max)</label>
+                        </div>
+                        <span class="text-xs text-gray-500">Ignores slider</span>
                     </div>
                 </div>
+
+                <button onclick="joinStream()" class="mt-8 w-full py-4 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-lg shadow-lg shadow-indigo-900/30 transform transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-bolt"></i>
+                    Connect Now
+                </button>
             </div>
         </div>
 
@@ -273,6 +281,11 @@
         const micToggle = document.getElementById('micToggle');
         const bandwidthSelect = document.getElementById('bandwidthSelect');
         const resolutionSelect = document.getElementById('resolutionSelect');
+        
+        // Slider elements
+        const bitrateSlider = document.getElementById('bitrateSlider');
+        const sliderValueDisplay = document.getElementById('sliderValueDisplay');
+        const maxQualityCheck = document.getElementById('maxQualityCheck');
 
         // --- State ---
         let peer = null;
@@ -292,6 +305,49 @@
             initLobbyMode();
         } else {
             initHostMode();
+        }
+
+        // --- LOBBY LOGIC ---
+        function initLobbyMode() {
+            isHost = false;
+            controlPanel.classList.add('hidden');
+            viewerLobby.classList.remove('hidden');
+            updateStatus('Waiting for selection...', 'yellow');
+
+            // Slider events
+            bitrateSlider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                sliderValueDisplay.innerText = (val / 1000).toFixed(1) + ' Mbps';
+            });
+
+            maxQualityCheck.addEventListener('change', (e) => {
+                if(e.target.checked) {
+                    bitrateSlider.disabled = true;
+                    bitrateSlider.classList.add('opacity-50', 'cursor-not-allowed');
+                    sliderValueDisplay.innerText = 'Max';
+                } else {
+                    bitrateSlider.disabled = false;
+                    bitrateSlider.classList.remove('opacity-50', 'cursor-not-allowed');
+                    sliderValueDisplay.innerText = (parseInt(bitrateSlider.value) / 1000).toFixed(1) + ' Mbps';
+                }
+            });
+        }
+
+        window.joinStream = function() {
+            // Determine bitrate
+            let requestedBitrate = parseInt(bitrateSlider.value);
+            let label = (requestedBitrate / 1000).toFixed(1) + ' Mbps';
+
+            if (maxQualityCheck.checked) {
+                requestedBitrate = 'max'; // Sentinel value
+                label = 'Source';
+            }
+
+            viewerLobby.classList.add('hidden');
+            updateStatus('Connecting...', 'yellow');
+            qualityTag.innerText = label;
+
+            initViewerConnection(requestedBitrate);
         }
 
         // --- HOST MODE LOGIC ---
@@ -341,26 +397,29 @@
             peer.on('call', (call) => {
                 console.log("Incoming connection:", call.metadata);
                 
-                // Read requested quality from metadata
-                const requestedQuality = call.metadata?.quality || 'source';
-                const bitrate = getBitrateForQuality(requestedQuality);
+                // Read requested bitrate from metadata
+                let viewerBitrate = call.metadata?.bitrate;
+                
+                // If 'max' or undefined, use host's max setting
+                if (!viewerBitrate || viewerBitrate === 'max') {
+                    viewerBitrate = parseInt(bandwidthSelect.value);
+                }
 
-                // SDP Munging Logic:
-                // We modify the SDP (Session Description Protocol) to force a max bitrate
-                // specifically for this connection.
+                // SDP Munging Logic for specific bitrate
                 const options = {
                     sdpTransform: (sdp) => {
-                        // This regex looks for the video media section and appends/replaces the bandwidth limit
-                        // b=AS:<bitrate in kbps>
+                        // b=AS is in kbps
+                        // If we are dealing with high bitrates, standard WebRTC implementations might require AS.
+                        const kbps = Math.floor(viewerBitrate); 
                         if (sdp.indexOf('b=AS:') > -1) {
-                            return sdp.replace(/b=AS:\d+/, `b=AS:${bitrate}`);
+                            return sdp.replace(/b=AS:\d+/, `b=AS:${kbps}`);
                         } else {
-                            return sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\nb=AS:${bitrate}\r\n`);
+                            return sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\nb=AS:${kbps}\r\n`);
                         }
                     }
                 };
 
-                console.log(`Answering connection with ${requestedQuality} profile (${bitrate} kbps)`);
+                console.log(`Answering with limit: ${viewerBitrate} kbps`);
                 call.answer(myStream, options);
                 
                 connections.push(call);
@@ -376,17 +435,6 @@
                     updateViewerCount();
                 });
             });
-        }
-
-        function getBitrateForQuality(quality) {
-            // Returns kbps
-            switch(quality) {
-                case 'low': return 1000; // 1 Mbps
-                case 'balanced': return 2500; // 2.5 Mbps
-                case 'source': 
-                default:
-                    return parseInt(bandwidthSelect.value) / 1000; // User defined max
-            }
         }
 
         async function getMediaStream() {
@@ -446,41 +494,29 @@
             resetUI();
         }
 
-        // --- VIEWER MODE LOGIC ---
+        // --- VIEWER CONNECTION LOGIC ---
 
-        function initLobbyMode() {
-            isHost = false;
-            controlPanel.classList.add('hidden');
-            viewerLobby.classList.remove('hidden');
-            updateStatus('Waiting for selection...', 'yellow');
-        }
-
-        // Called by Lobby buttons
-        window.connectWithQuality = function(quality) {
-            viewerLobby.classList.add('hidden');
-            updateStatus('Connecting...', 'yellow');
-            qualityTag.innerText = quality.charAt(0).toUpperCase() + quality.slice(1);
-
+        function initViewerConnection(bitrate) {
             peer = new Peer(null, PEER_CONFIG);
 
             peer.on('open', (id) => {
                 console.log("Viewer ID:", id);
-                connectToHost(targetHostId, quality);
+                connectToHost(targetHostId, bitrate);
             });
 
             peer.on('error', (err) => {
                 alert("Connection Error: " + err.type);
                 updateStatus('Error', 'gray');
-                viewerLobby.classList.remove('hidden'); // Show lobby again on error
+                viewerLobby.classList.remove('hidden'); 
             });
         }
 
-        function connectToHost(hostId, quality) {
-            console.log(`Calling host ${hostId} with quality: ${quality}`);
+        function connectToHost(hostId, bitrate) {
+            console.log(`Calling host ${hostId} requesting: ${bitrate} kbps`);
             
-            // Pass quality preference in metadata
+            // Pass bitrate preference in metadata
             const call = peer.call(hostId, createEmptyStream(), {
-                metadata: { quality: quality }
+                metadata: { bitrate: bitrate }
             });
 
             call.on('stream', (remoteStream) => {
