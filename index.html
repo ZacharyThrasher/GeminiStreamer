@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProStream P2P Broadcast</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- PeerJS for P2P Networking -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        .pulse-live {
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+        .scanline {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden font-sans selection:bg-purple-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="bg-gray-900 border-b border-gray-800 p-4 shadow-2xl z-20">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-900/50">
+                    <i class="fa-solid fa-satellite-dish text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">
+                        ProStream <span class="text-gray-500 font-normal text-sm block">P2P Broadcast Station</span>
+                    </h1>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <!-- Status Badge -->
+                <div id="statusBadge" class="flex items-center space-x-2 px-4 py-1.5 bg-gray-800 text-gray-400 rounded-full text-xs font-bold border border-gray-700 uppercase tracking-wider transition-colors">
+                    <div id="statusDot" class="w-2 h-2 bg-gray-500 rounded-full"></div>
+                    <span id="statusText">Offline</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 container mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 overflow-hidden">
+        
+        <!-- Left Panel: Controls (Hidden in Viewer Mode) -->
+        <div id="controlPanel" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto pb-4 transition-all duration-500">
+            
+            <!-- Connection Card -->
+            <div class="bg-gray-900/50 backdrop-blur rounded-xl p-5 border border-gray-800 shadow-xl">
+                <h2 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Broadcast Control</h2>
+                
+                <div class="space-y-3">
+                    <button id="startBtn" class="w-full py-4 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-lg shadow-lg shadow-indigo-900/30 transform transition-all active:scale-95 flex items-center justify-center gap-2 group">
+                        <i class="fa-solid fa-signal group-hover:animate-ping text-xs"></i>
+                        <span>Start Broadcasting</span>
+                    </button>
+                    
+                    <button id="stopBtn" disabled class="w-full py-4 px-4 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transform transition-all active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-power-off"></i>
+                        Stop Broadcast
+                    </button>
+                </div>
+
+                <!-- Viewer Link (Appears when live) -->
+                <div id="shareSection" class="hidden mt-4 pt-4 border-t border-gray-800 animate-fade-in">
+                    <label class="block text-xs font-medium text-green-400 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-link"></i> Share this link to friends:
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="shareUrl" readonly class="w-full bg-gray-950 border border-green-900/50 text-gray-300 text-xs rounded p-2 focus:outline-none focus:border-green-500 font-mono">
+                        <button id="copyBtn" class="bg-gray-800 hover:bg-gray-700 text-white px-3 rounded border border-gray-700 transition-colors">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                    <div id="viewerCount" class="mt-3 text-xs text-gray-400 flex items-center gap-2">
+                        <i class="fa-solid fa-users"></i>
+                        <span>Connected Viewers: <b class="text-white">0</b></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration -->
+            <div class="bg-gray-900/50 backdrop-blur rounded-xl p-5 border border-gray-800 shadow-xl flex-1">
+                <h2 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Stream Settings</h2>
+                
+                <div class="space-y-5">
+                    <!-- Bandwidth Limit -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Bandwidth</label>
+                        <div class="relative">
+                            <select id="bandwidthSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
+                                <option value="1000">Low (1 Mbps)</option>
+                                <option value="2500">Standard (2.5 Mbps)</option>
+                                <option value="5000" selected>High (5 Mbps)</option>
+                                <option value="10000">Ultra (10 Mbps)</option>
+                                <option value="50000">Extreme (50 Mbps)</option>
+                                <option value="500000">Ludicrous (500 Mbps)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
+                        </div>
+                        <p class="text-[10px] text-gray-600 mt-1">Controls the WebRTC SDP bandwidth limit.</p>
+                    </div>
+
+                    <!-- Audio -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Audio Source</label>
+                        <div class="flex items-center justify-between bg-gray-950 p-3 rounded-lg border border-gray-800">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-microphone-lines text-indigo-400"></i>
+                                <span class="text-sm text-gray-300">Mix Microphone</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="micToggle" class="sr-only peer">
+                                <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="bg-blue-900/10 border border-blue-900/30 p-3 rounded-lg">
+                        <p class="text-[11px] text-blue-300 leading-relaxed">
+                            <i class="fa-solid fa-info-circle mr-1"></i>
+                            This runs entirely in your browser. When you start, a P2P ID is generated. Friends connect directly to you. No data goes to a server.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Video Feed -->
+        <div class="flex-1 flex flex-col overflow-hidden min-h-0 relative">
+            
+            <!-- Video Container -->
+            <div id="videoContainer" class="relative bg-black rounded-xl border border-gray-800 overflow-hidden shadow-2xl flex-1 flex items-center justify-center group">
+                
+                <!-- Scanlines overlay for aesthetic -->
+                <div class="scanline z-10 opacity-30 pointer-events-none"></div>
+
+                <video id="mainVideo" class="max-w-full max-h-full w-full h-full object-contain z-0" autoplay playsinline></video>
+                
+                <!-- Placeholder / Initial State -->
+                <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 z-0">
+                    <div class="w-32 h-32 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500 shadow-2xl shadow-black">
+                        <i class="fa-solid fa-tower-broadcast text-5xl text-gray-700"></i>
+                    </div>
+                    <p class="text-xl font-bold text-gray-500">Signal Offline</p>
+                    <p class="text-sm opacity-50 mt-2">Waiting for source...</p>
+                </div>
+
+                <!-- Overlay Info (Resolution/Bitrate) -->
+                <div id="videoOverlay" class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md text-xs font-mono text-green-400 hidden z-20 flex items-center gap-3">
+                    <div class="flex items-center gap-1">
+                        <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                        <span class="font-bold text-white tracking-wider">LIVE</span>
+                    </div>
+                    <span class="text-gray-500">|</span>
+                    <span id="resDisplay">1920x1080</span>
+                    <span class="text-gray-500">|</span>
+                    <span id="bandwidthDisplay">5 Mbps</span>
+                </div>
+
+                <!-- Viewer Message (Only visible to viewers) -->
+                <div id="viewerMessage" class="absolute bottom-10 bg-indigo-600/90 text-white px-6 py-3 rounded-full font-bold shadow-lg transform translate-y-20 transition-transform duration-500 hidden z-30">
+                    Connected to Stream
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- Configuration ---
+        const PEER_CONFIG = {
+            debug: 2
+            // No custom ICE servers defined, using PeerJS defaults (Google STUN)
+            // For production/enterprise, you'd add TURN servers here.
+        };
+
+        // --- DOM Elements ---
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const mainVideo = document.getElementById('mainVideo');
+        const placeholder = document.getElementById('placeholder');
+        const controlPanel = document.getElementById('controlPanel');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const shareSection = document.getElementById('shareSection');
+        const shareUrlInput = document.getElementById('shareUrl');
+        const copyBtn = document.getElementById('copyBtn');
+        const viewerCountEl = document.querySelector('#viewerCount b');
+        const videoOverlay = document.getElementById('videoOverlay');
+        const resDisplay = document.getElementById('resDisplay');
+        const bandwidthDisplay = document.getElementById('bandwidthDisplay');
+        const micToggle = document.getElementById('micToggle');
+        const bandwidthSelect = document.getElementById('bandwidthSelect');
+
+        // --- State ---
+        let peer = null;
+        let myStream = null;
+        let audioContext = null;
+        let audioDestination = null;
+        let connections = []; // Track connected viewers
+        let isHost = true;
+
+        // --- Initialization ---
+        
+        // 1. Check URL parameters to see if we are a HOST or a VIEWER
+        const urlParams = new URLSearchParams(window.location.search);
+        const hostIdToConnect = urlParams.get('watch');
+
+        if (hostIdToConnect) {
+            initViewerMode(hostIdToConnect);
+        } else {
+            initHostMode();
+        }
+
+        // --- HOST MODE LOGIC ---
+
+        function initHostMode() {
+            isHost = true;
+            
+            // Initialize Peer only when user clicks Start to save resources/avoid ID spam
+            startBtn.addEventListener('click', async () => {
+                startBtn.disabled = true;
+                startBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Initializing...';
+
+                try {
+                    // 1. Get Media (Screen + Mic)
+                    myStream = await getMediaStream();
+                    
+                    // 2. Show Preview
+                    mainVideo.srcObject = myStream;
+                    mainVideo.muted = true; // Host mutes themselves locally
+                    placeholder.classList.add('hidden');
+                    videoOverlay.classList.remove('hidden');
+                    
+                    // 3. Connect to PeerJS Server
+                    peer = new Peer(generateRandomId(), PEER_CONFIG);
+
+                    peer.on('open', (id) => {
+                        console.log('My Peer ID is: ' + id);
+                        updateStatus('Broadcasting', 'red');
+                        enableLiveUI(id);
+                        setupHostEvents();
+                    });
+
+                    peer.on('error', (err) => {
+                        console.error(err);
+                        alert("Connection Error: " + err.type);
+                        resetUI();
+                    });
+
+                } catch (err) {
+                    console.error("Failed to start stream:", err);
+                    alert("Could not start capture: " + err.message);
+                    resetUI();
+                }
+            });
+
+            stopBtn.addEventListener('click', stopBroadcast);
+        }
+
+        function setupHostEvents() {
+            // Handle incoming calls (Viewers connecting)
+            peer.on('call', (call) => {
+                console.log("Incoming viewer connection...");
+                
+                // Answer the call with our A/V stream
+                // We apply bandwidth SDP munging here if possible
+                const options = {
+                    sdpTransform: (sdp) => {
+                        // Very basic SDP hacking to suggest bandwidth
+                        const bandwidth = bandwidthSelect.value;
+                        return sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:' + bandwidth + '\r\n');
+                    }
+                };
+
+                call.answer(myStream, options);
+                
+                // Track connection
+                connections.push(call);
+                updateViewerCount();
+
+                call.on('close', () => {
+                    connections = connections.filter(c => c !== call);
+                    updateViewerCount();
+                });
+                
+                call.on('error', () => {
+                    connections = connections.filter(c => c !== call);
+                    updateViewerCount();
+                });
+            });
+        }
+
+        async function getMediaStream() {
+            // Screen Capture
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    width: { ideal: 1920, max: 3840 },
+                    height: { ideal: 1080, max: 2160 },
+                    frameRate: { ideal: 60 }
+                },
+                audio: true // System Audio
+            });
+
+            // Update Resolution Display
+            const settings = displayStream.getVideoTracks()[0].getSettings();
+            if(settings.width) resDisplay.innerText = `${settings.width}x${settings.height}`;
+            bandwidthDisplay.innerText = `${parseInt(bandwidthSelect.value)/1000} Mbps`;
+
+            // If mic is off, just return display stream
+            if (!micToggle.checked) return displayStream;
+
+            // If mic is on, mix it
+            try {
+                const micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                audioContext = new AudioContext();
+                audioDestination = audioContext.createMediaStreamDestination();
+
+                // Mix System Audio
+                if (displayStream.getAudioTracks().length > 0) {
+                    const sysSource = audioContext.createMediaStreamSource(displayStream);
+                    const sysGain = audioContext.createGain();
+                    sysGain.gain.value = 1.0;
+                    sysSource.connect(sysGain).connect(audioDestination);
+                }
+
+                // Mix Mic Audio
+                const micSource = audioContext.createMediaStreamSource(micStream);
+                const micGain = audioContext.createGain();
+                micGain.gain.value = 1.5; // Slight boost
+                micSource.connect(micGain).connect(audioDestination);
+
+                // Combine
+                return new MediaStream([
+                    ...displayStream.getVideoTracks(),
+                    ...audioDestination.stream.getAudioTracks()
+                ]);
+
+            } catch (e) {
+                console.warn("Mic failed, falling back to system only", e);
+                return displayStream;
+            }
+        }
+
+        function stopBroadcast() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            if (myStream) {
+                myStream.getTracks().forEach(t => t.stop());
+                myStream = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+            connections = [];
+            resetUI();
+        }
+
+
+        // --- VIEWER MODE LOGIC ---
+
+        function initViewerMode(hostId) {
+            isHost = false;
+            
+            // Hide controls, expand video
+            controlPanel.classList.add('hidden'); // Simplified view for viewer
+            
+            updateStatus('Connecting...', 'yellow');
+
+            peer = new Peer(null, PEER_CONFIG); // We don't need a specific ID
+
+            peer.on('open', (id) => {
+                console.log("Viewer ID: " + id);
+                connectToHost(hostId);
+            });
+
+            peer.on('error', (err) => {
+                alert("Connection Error: " + err.type);
+                updateStatus('Error', 'gray');
+            });
+        }
+
+        function connectToHost(hostId) {
+            console.log("Calling host: " + hostId);
+            
+            // Call the host. We send no stream (null) because we are just watching.
+            const call = peer.call(hostId, createEmptyStream());
+
+            call.on('stream', (remoteStream) => {
+                console.log("Stream received!");
+                updateStatus('Live Signal', 'green');
+                
+                mainVideo.srcObject = remoteStream;
+                mainVideo.muted = false; // Viewers want to hear!
+                
+                // Attempt to play (browser autoplay policies might block audio until click)
+                const playPromise = mainVideo.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        // Show a "Click to Play" button if autoplay fails
+                        placeholder.innerHTML = '<button class="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold" onclick="mainVideo.play(); this.parentElement.classList.add(\'hidden\')">Click to Start Stream</button>';
+                        placeholder.classList.remove('hidden');
+                    });
+                } else {
+                    placeholder.classList.add('hidden');
+                }
+
+                // Show connected toast
+                const toast = document.getElementById('viewerMessage');
+                toast.classList.remove('hidden');
+                toast.classList.remove('translate-y-20');
+            });
+
+            call.on('close', () => {
+                alert("Broadcast ended by host.");
+                location.href = window.location.pathname; // Reload to normal mode
+            });
+            
+            call.on('error', (err) => {
+                console.error(err);
+                updateStatus('Disconnected', 'gray');
+            });
+        }
+
+        // Helper to create a dummy stream for the viewer to send (required by some WebRTC implementations)
+        function createEmptyStream() {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const dst = ctx.createMediaStreamDestination();
+            osc.connect(dst);
+            osc.start();
+            const track = dst.stream.getAudioTracks()[0];
+            track.enabled = false; // Mute it
+            return new MediaStream([track]);
+        }
+
+
+        // --- UI UTILS ---
+
+        function generateRandomId() {
+            // Generate a readable-ish ID: e.g., stream-xc92-k291
+            return 'stream-' + Math.random().toString(36).substr(2, 4) + '-' + Math.random().toString(36).substr(2, 4);
+        }
+
+        function enableLiveUI(id) {
+            startBtn.innerHTML = '<i class="fa-solid fa-signal"></i> On Air';
+            startBtn.classList.add('animate-pulse');
+            stopBtn.disabled = false;
+            
+            // Build Share URL
+            const url = new URL(window.location.href);
+            url.searchParams.set('watch', id);
+            shareUrlInput.value = url.toString();
+            
+            shareSection.classList.remove('hidden');
+            document.getElementById('videoContainer').classList.add('border-red-500', 'pulse-live');
+        }
+
+        function resetUI() {
+            updateStatus('Offline', 'gray');
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="fa-solid fa-signal"></i> Start Broadcasting';
+            startBtn.classList.remove('animate-pulse');
+            stopBtn.disabled = true;
+            shareSection.classList.add('hidden');
+            
+            mainVideo.srcObject = null;
+            placeholder.classList.remove('hidden');
+            videoOverlay.classList.add('hidden');
+            document.getElementById('videoContainer').classList.remove('border-red-500', 'pulse-live');
+            viewerCountEl.innerText = '0';
+        }
+
+        function updateStatus(text, color) {
+            statusText.innerText = text;
+            statusDot.className = `w-2 h-2 rounded-full ${getColorClass(color)}`;
+            
+            // Colors
+            statusBadge.className = `flex items-center space-x-2 px-4 py-1.5 rounded-full text-xs font-bold border uppercase tracking-wider transition-colors ${getBadgeClass(color)}`;
+        }
+
+        function getColorClass(color) {
+            if(color === 'red') return 'bg-red-500 animate-pulse';
+            if(color === 'green') return 'bg-green-500';
+            if(color === 'yellow') return 'bg-yellow-500 animate-pulse';
+            return 'bg-gray-500';
+        }
+
+        function getBadgeClass(color) {
+            if(color === 'red') return 'bg-red-900/30 text-red-400 border-red-900/50';
+            if(color === 'green') return 'bg-green-900/30 text-green-400 border-green-900/50';
+            if(color === 'yellow') return 'bg-yellow-900/30 text-yellow-400 border-yellow-900/50';
+            return 'bg-gray-800 text-gray-400 border-gray-700';
+        }
+
+        function updateViewerCount() {
+            viewerCountEl.innerText = connections.length;
+        }
+
+        copyBtn.addEventListener('click', () => {
+            shareUrlInput.select();
+            document.execCommand('copy'); // Fallback for older browsers or iframe contexts
+            // or navigator.clipboard.writeText(shareUrlInput.value);
+            
+            const originalIcon = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
+            setTimeout(() => copyBtn.innerHTML = originalIcon, 2000);
+        });
+
+    </script>
+</body>
+</html>
