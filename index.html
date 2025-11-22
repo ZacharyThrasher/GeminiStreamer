@@ -234,6 +234,12 @@
                                 <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
                             </label>
                         </div>
+                        
+                        <!-- Audio Isolation Hint -->
+                        <div class="mt-2 text-[10px] text-gray-500 leading-tight">
+                            <span class="text-yellow-500 font-bold">Want to exclude Discord?</span> 
+                            Sharing "Entire Screen" captures <span class="italic">all</span> audio. To exclude specific apps, share a specific <span class="text-white">Tab</span> or use a virtual audio cable.
+                        </div>
                     </div>
 
                     <div class="bg-indigo-900/10 border border-indigo-900/30 p-3 rounded-lg">
@@ -439,18 +445,25 @@
                     viewerBitrate = parseInt(bandwidthSelect.value);
                 }
 
-                // SDP Munging Logic for specific bitrate
+                // SDP Munging Logic for specific bitrate (Robust)
                 const options = {
                     sdpTransform: (sdp) => {
                         try {
-                            // b=AS is in kbps
-                            // If we are dealing with high bitrates, standard WebRTC implementations might require AS.
                             const kbps = Math.floor(viewerBitrate); 
-                            if (sdp.indexOf('b=AS:') > -1) {
-                                return sdp.replace(/b=AS:\d+/, `b=AS:${kbps}`);
-                            } else {
-                                return sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\nb=AS:${kbps}\r\n`);
+                            
+                            // Use a safer regex that finds the m=video line and appends bandwidth below it
+                            // if not already present. This matches standard WebRTC SDP format better.
+                            // Look for m=video line, match until end of line.
+                            if (sdp.indexOf('m=video') !== -1) {
+                                // Replace existing b=AS line if it exists under video
+                                if (sdp.match(/m=video[\s\S]*?b=AS:\d+/)) {
+                                   return sdp.replace(/(m=video[\s\S]*?b=AS:)\d+/, `$1${kbps}`);
+                                } else {
+                                   // Insert b=AS line after m=video line
+                                   return sdp.replace(/(m=video.*)(\r\n)/, `$1$2b=AS:${kbps}$2`);
+                                }
                             }
+                            return sdp;
                         } catch (e) {
                             console.error("SDP Transform failed:", e);
                             return sdp;
@@ -554,7 +567,7 @@
             console.log(`Calling host ${hostId} requesting: ${bitrate} kbps`);
             
             // Pass bitrate preference in metadata
-            const call = peer.call(hostId, createEmptyStream(), {
+            const call = peer.call(hostId, createDummyStream(), {
                 metadata: { bitrate: bitrate }
             });
 
@@ -564,7 +577,7 @@
                 mainVideo.srcObject = remoteStream;
                 // FIX: Mute initially to allow autoplay, then unmute
                 mainVideo.muted = true; 
-                unmuteOverlayBtn.classList.remove('hidden'); // Show button
+                unmuteOverlayBtn.classList.remove('hidden'); 
                 
                 placeholder.classList.add('hidden');
                 videoOverlay.classList.remove('hidden');
@@ -575,13 +588,11 @@
                     playPromise.then(() => {
                         // Play successful! Now try to unmute automatically
                         mainVideo.muted = false;
-                        // If unmute worked, hide button, else keep it
                         if (!mainVideo.muted) {
                             unmuteOverlayBtn.classList.add('hidden');
                         }
                     }).catch(error => {
                         console.warn("Autoplay prevented:", error);
-                        // Fallback UI
                         placeholder.innerHTML = '<button class="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-transform" onclick="mainVideo.muted=false; mainVideo.play(); this.parentElement.classList.add(\'hidden\')"><i class="fa-solid fa-play mr-2"></i> Click to Watch</button>';
                         placeholder.classList.remove('hidden');
                     });
@@ -603,7 +614,6 @@
             });
         }
         
-        // Manual Unmute toggle
         window.toggleMute = function() {
             mainVideo.muted = !mainVideo.muted;
             if(mainVideo.muted) {
@@ -613,15 +623,27 @@
             }
         }
 
-        function createEmptyStream() {
+        // UPDATED: Creates a dummy stream with both AUDIO and VIDEO tracks
+        // This forces the PeerConnection to properly negotiate video immediately
+        function createDummyStream() {
+            // 1. Audio Track (Oscillator)
             const ctx = new AudioContext();
             const osc = ctx.createOscillator();
             const dst = ctx.createMediaStreamDestination();
             osc.connect(dst);
             osc.start();
-            const track = dst.stream.getAudioTracks()[0];
-            track.enabled = false;
-            return new MediaStream([track]);
+            const audioTrack = dst.stream.getAudioTracks()[0];
+            audioTrack.enabled = false;
+
+            // 2. Video Track (Canvas)
+            const canvas = document.createElement('canvas');
+            canvas.width = 640;
+            canvas.height = 480;
+            const stream = canvas.captureStream(30);
+            const videoTrack = stream.getVideoTracks()[0];
+            videoTrack.enabled = false;
+
+            return new MediaStream([audioTrack, videoTrack]);
         }
 
         // --- UI UTILS ---
