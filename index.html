@@ -127,7 +127,7 @@
         
         let player = null;
         let retryCount = 0;
-        let maxRetries = 3;
+        let maxRetries = 5;
         let retryTimeout = null;
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -197,7 +197,11 @@
                 sources: [{ label: 'WebRTC', type: 'webrtc', file: url }],
                 autoStart: true,
                 mute: true,
-                expandFullScreenUI: true
+                expandFullScreenUI: true,
+                webrtcConfig: {
+                    timeoutMaxRetry: 4,
+                    connectionTimeout: 10000
+                }
             });
 
             player.on('ready', () => updateStatus('Ready', 'yellow'));
@@ -222,7 +226,7 @@
         function handleConnectionError(host, app, stream) {
             if (retryCount < maxRetries) {
                 retryCount++;
-                const retryDelay = 2000; // 2 seconds
+                const retryDelay = 3000; // 3 seconds
                 updateStatus(`Retry ${retryCount}/${maxRetries}...`, 'yellow');
                 console.log(`Retrying in ${retryDelay}ms...`);
                 
@@ -232,6 +236,8 @@
             } else {
                 updateStatus('Connection Failed', 'red');
                 console.error('Max retries reached. Please check your connection and try again.');
+                // Reset retry counter after final failure so user can manually retry
+                setTimeout(() => { retryCount = 0; }, 5000);
             }
         }
 
