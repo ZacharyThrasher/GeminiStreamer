@@ -287,6 +287,11 @@
                     </button>
                 </div>
 
+                <!-- Fullscreen Button -->
+                <button id="fullscreenBtn" onclick="toggleFullscreen()" class="absolute top-4 right-4 bg-black/70 backdrop-blur-sm border border-white/10 px-3 py-2 rounded-md text-white hover:bg-black/90 hover:border-indigo-500 transition-all hidden z-20 group" title="Fullscreen (F)">
+                    <i id="fullscreenIcon" class="fa-solid fa-expand text-sm group-hover:text-indigo-400"></i>
+                </button>
+
                 <!-- Viewer Message -->
                 <div id="viewerMessage" class="absolute bottom-10 bg-indigo-600/90 text-white px-6 py-3 rounded-full font-bold shadow-lg transform translate-y-20 transition-transform duration-500 hidden z-30">
                     Connected to Stream
@@ -501,6 +506,7 @@
                     mainVideo.muted = true;
                     placeholder.classList.add('hidden');
                     videoOverlay.classList.remove('hidden');
+                    document.getElementById('fullscreenBtn').classList.remove('hidden');
                     qualityTag.innerText = "Host (Source)";
                     
                     streamManager.peer = new Peer(generateRandomId(), PEER_CONFIG);
@@ -763,6 +769,7 @@
                 
                 placeholder.classList.add('hidden');
                 videoOverlay.classList.remove('hidden');
+                document.getElementById('fullscreenBtn').classList.remove('hidden');
 
                 const playPromise = mainVideo.play();
                 
@@ -806,6 +813,56 @@
                 unmuteOverlayBtn.classList.add('hidden');
             }
         }
+
+        window.toggleFullscreen = function() {
+            const videoContainer = document.getElementById('videoContainer');
+            const fullscreenIcon = document.getElementById('fullscreenIcon');
+            
+            if (!document.fullscreenElement) {
+                // Enter fullscreen
+                if (videoContainer.requestFullscreen) {
+                    videoContainer.requestFullscreen();
+                } else if (videoContainer.webkitRequestFullscreen) { // Safari
+                    videoContainer.webkitRequestFullscreen();
+                } else if (videoContainer.msRequestFullscreen) { // IE11
+                    videoContainer.msRequestFullscreen();
+                }
+            } else {
+                // Exit fullscreen
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) { // Safari
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { // IE11
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        // Update fullscreen icon when fullscreen state changes
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+        document.addEventListener('msfullscreenchange', updateFullscreenIcon);
+
+        function updateFullscreenIcon() {
+            const fullscreenIcon = document.getElementById('fullscreenIcon');
+            if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+                fullscreenIcon.className = 'fa-solid fa-compress text-sm group-hover:text-indigo-400';
+            } else {
+                fullscreenIcon.className = 'fa-solid fa-expand text-sm group-hover:text-indigo-400';
+            }
+        }
+
+        // Keyboard shortcut: F for fullscreen
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'f' || e.key === 'F') {
+                const fullscreenBtn = document.getElementById('fullscreenBtn');
+                if (!fullscreenBtn.classList.contains('hidden')) {
+                    e.preventDefault();
+                    toggleFullscreen();
+                }
+            }
+        });
 
         function createDummyStream() {
             const ctx = new AudioContext();
@@ -856,6 +913,7 @@
             mainVideo.srcObject = null;
             placeholder.classList.remove('hidden');
             videoOverlay.classList.add('hidden');
+            document.getElementById('fullscreenBtn').classList.add('hidden');
             document.getElementById('videoContainer').classList.remove('border-red-500', 'pulse-live');
             viewerCountEl.innerText = '0';
         }
