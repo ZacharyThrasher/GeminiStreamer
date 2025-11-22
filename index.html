@@ -137,7 +137,8 @@
                 configModal.classList.add('hidden');
                 initializePlayer();
             } else {
-                hostInput.value = localStorage.getItem('ome_host') || window.location.hostname;
+                // Default to your public IP for easy testing
+                hostInput.value = localStorage.getItem('ome_host') || '104.6.177.38';
             }
         });
 
@@ -159,16 +160,9 @@
             placeholder.classList.add('hidden');
             certWarning.classList.add('hidden');
 
-            // Logic: If page is HTTPS, use WSS/3334. If HTTP, use WS/3333.
-            let protocol = 'ws://';
-            let port = '3333';
-            
-            if (location.protocol === 'https:') {
-                protocol = 'wss://';
-                port = '3334';
-                // Set the warning link just in case it fails
-                certLink.href = `https://${host}:${port}`;
-            }
+            // Always use non-secure WebSocket on port 3333 for simplicity
+            const protocol = 'ws://';
+            const port = '3333';
 
             const url = `${protocol}${host}:${port}/${app}/${stream}`;
             console.log("Connecting to:", url);
@@ -191,11 +185,6 @@
             player.on('error', (error) => {
                 console.error("OvenPlayer Error:", error);
                 updateStatus('Error', 'red');
-                
-                // Detect SSL handshake failure (common with self-signed certs)
-                if (location.protocol === 'https:' && error.code === 501) {
-                    certWarning.classList.remove('hidden');
-                }
             });
         }
 
