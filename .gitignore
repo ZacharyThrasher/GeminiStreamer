@@ -2,6 +2,9 @@
 origin_conf/server.key
 origin_conf/server.crt
 
+# Environment variables (contains IP addresses)
+.env
+
 # Cloudflare Tunnel (not used)
 cloudflared.exe
 tunnel-config.yml

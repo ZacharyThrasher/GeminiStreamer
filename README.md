@@ -1,18 +1,18 @@
 # 🔥 ProStream OME: Low-Latency Broadcast Station
 
-ProStream OME is a high-performance, self-hosted streaming solution designed to deliver broadcast-quality video with **sub-second latency** using WebRTC.
+ProStream OME is a high-performance, self-hosted streaming solution designed to deliver broadcast-quality video with **sub-second latency** using SRT and WebRTC.
 
 ---
 
 ## 🏗 System Architecture
 
 ```
-[🖥️ Your Desktop] → [OBS Studio] → [RTMP] → [OvenMediaEngine Docker] → [WebRTC] → [Friend's Browser]
+[🖥️ Your Desktop] → [OBS Studio] → [RTMP/SRT] → [OvenMediaEngine Docker] → [SRT/WebRTC] → [Friend's VLC/Browser]
 ```
 
 **Source (You)**: OBS Studio captures your screen and encodes it (H.264/HEVC/AV1)  
-**Server (Docker)**: OvenMediaEngine receives RTMP and converts to WebRTC  
-**Client (Friends)**: HTML5 player connects via WebRTC for ultra-low latency playback
+**Server (Docker)**: OvenMediaEngine receives RTMP/SRT and distributes via SRT or WebRTC  
+**Client (Friends)**: VLC (SRT - best quality) or Browser (WebRTC - easiest)
 
 ---
 
@@ -46,9 +46,24 @@ This starts OvenMediaEngine with:
 
 3. Click **Start Streaming** in OBS
 
-### 3️⃣ Share the Player
+### 3️⃣ Share with Your Friends
 
-**Simply send `index.html` to your friends!**
+**Option A: VLC Player (⭐ Best Quality & Reliability)**
+
+Send them the `VIEWER_INSTRUCTIONS.md` file! It has simple step-by-step instructions.
+
+**Quick URL for VLC:**
+```
+srt://104.6.177.38:9998?streamid=#default#app/stream
+```
+
+They just paste this in VLC → Media → Open Network Stream
+
+---
+
+**Option B: Web Browser (Easiest)**
+
+**Simply send them the `index.html` file!**
 
 They just:
 1. Download the file
@@ -70,6 +85,8 @@ Forward these ports on your router to your PC's local IP:
 |------------|----------|---------|
 | 1935 | TCP | RTMP input from OBS |
 | 3333 | TCP | WebRTC signaling |
+| 9998 | UDP | SRT output (to viewers) |
+| 9999 | UDP | SRT input (from OBS - optional) |
 | 10000-10010 | UDP | WebRTC media transport |
 
 **Find your public IP**: Visit [whatismyip.com](https://www.whatismyip.com)

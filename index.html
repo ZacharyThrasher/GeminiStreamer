@@ -96,7 +96,7 @@
             <div class="space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Server Host (IP or Domain)</label>
-                    <input type="text" id="hostInput" placeholder="e.g., 104.6.177.38" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                    <input type="text" id="hostInput" placeholder="e.g., YOUR_PUBLIC_IP" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">App Name</label>
@@ -141,7 +141,7 @@
                 initializePlayer();
             } else {
                 // Default to your public IP for easy testing
-                hostInput.value = localStorage.getItem('ome_host') || '104.6.177.38';
+                hostInput.value = localStorage.getItem('ome_host') || 'YOUR_PUBLIC_IP';
             }
         });
 
