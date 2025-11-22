@@ -158,14 +158,22 @@
 
             closeSettings();
             placeholder.classList.add('hidden');
-            certWarning.classList.add('hidden');
 
-            // Always use non-secure WebSocket on port 3333 for simplicity
-            const protocol = 'ws://';
-            const port = '3333';
+            // Detect if page is served via HTTPS (like GitHub Pages)
+            const isSecure = window.location.protocol === 'https:';
+            const protocol = isSecure ? 'wss://' : 'ws://';
+            const port = isSecure ? '3334' : '3333';
 
             const url = `${protocol}${host}:${port}/${app}/${stream}`;
             console.log("Connecting to:", url);
+
+            // Show cert warning if using HTTPS/WSS
+            if (isSecure) {
+                certWarning.classList.remove('hidden');
+                certLink.href = `https://${host}:${port}`;
+            } else {
+                certWarning.classList.add('hidden');
+            }
 
             if (player) player.remove();
 
