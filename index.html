@@ -689,6 +689,15 @@
                 if (mainVideo.playoutDelayHint !== undefined) {
                     mainVideo.playoutDelayHint = 0; 
                 }
+
+                // FIX: Update resolution display dynamically based on actual incoming stream
+                const updateRes = () => {
+                    if (mainVideo.videoWidth && mainVideo.videoHeight) {
+                        resDisplay.innerText = `${mainVideo.videoWidth}x${mainVideo.videoHeight}`;
+                    }
+                };
+                mainVideo.addEventListener('loadedmetadata', updateRes);
+                mainVideo.addEventListener('resize', updateRes);
                 
                 mainVideo.muted = true; 
                 unmuteOverlayBtn.classList.remove('hidden'); 
