@@ -3,6 +3,7 @@
 	<Name>OvenMediaEngine</Name>
 	<Type>origin</Type>
 	<IP>*</IP>
+	<StunServer>stun.l.google.com:19302</StunServer>
 
 	<Bind>
 		<Providers>
@@ -26,7 +27,7 @@
 					<TLSPort>3334</TLSPort>
 				</Signalling>
 				<IceCandidates>
-					<IceCandidate>*:10000-10010/udp</IceCandidate>
+					<IceCandidate>${PublicIP}:10000-10010/udp</IceCandidate>
 				</IceCandidates>
 			</WebRTC>
 		</Publishers>
