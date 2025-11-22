@@ -1,146 +1,168 @@
-🔥 ProStream OME: Low-Latency Broadcast Station
+# 🔥 ProStream OME: Low-Latency Broadcast Station
 
-ProStream OME is a high-performance, self-hosted streaming solution designed to deliver broadcast-quality video with sub-second latency.
+ProStream OME is a high-performance, self-hosted streaming solution designed to deliver broadcast-quality video with **sub-second latency** using WebRTC.
 
-It bypasses the limitations of browser-based capture (WebRTC getDisplayMedia) by leveraging OBS Studio for high-fidelity hardware encoding (NVENC/AV1) and OvenMediaEngine for ultra-low-latency distribution.
+---
 
-🏗 System Architecture
+## 🏗 System Architecture
 
-The system consists of three main components:
+```
+[🖥️ Your Desktop] → [OBS Studio] → [RTMP] → [OvenMediaEngine Docker] → [WebRTC] → [Friend's Browser]
+```
 
-graph LR
-    A[🖥️ Game/Desktop] -->|Capture| B(OBS Studio)
-    B -->|RTMP Ingest| C{OvenMediaEngine}
-    C -->|WebRTC Stream| D[Your Browser]
-    C -->|WebRTC Stream| E[Friend's Browser]
-    
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#65f,stroke:#333,stroke-width:2px,color:#fff
+**Source (You)**: OBS Studio captures your screen and encodes it (H.264/HEVC/AV1)  
+**Server (Docker)**: OvenMediaEngine receives RTMP and converts to WebRTC  
+**Client (Friends)**: HTML5 player connects via WebRTC for ultra-low latency playback
 
+---
 
-Source (Host): OBS Studio captures the screen and encodes it (H.264/AV1).
+## 🚀 Quick Start
 
-Server (Docker): OvenMediaEngine receives the stream and transmuxes it to WebRTC.
+### 1️⃣ Start the Server
 
-Client (Viewer): A custom HTML5 player connects via WebRTC for playback.
-
-🚀 Prerequisites
-
-Hardware: A PC capable of running Docker Desktop and OBS Studio simultaneously.
-
-Software:
-
-Docker Desktop (Running in background)
-
-OBS Studio
-
-Network: Ability to port forward (if streaming over the internet).
-
-🛠️ Installation & Setup
-
-1. Start the Server (Docker)
-
-Create a folder for your project.
-
-Save the provided docker-compose.yml file inside it.
-
-Open a terminal/PowerShell in that folder.
-
-Run the following command to start the engine:
-
+```bash
 docker-compose up -d
+```
 
+This starts OvenMediaEngine with:
+- **RTMP Input** on port 1935 (for OBS)
+- **WebRTC Output** on port 3333 (for viewers)
+- **Media Ports** 10000-10010/UDP (for WebRTC connections)
 
-2. Configure Network (Port Forwarding)
+### 2️⃣ Configure OBS Studio
 
-If you want friends to connect from outside your home network, log into your router and forward the following ports to your host PC's IP address:
+1. Open **OBS Settings** → **Stream**
+   - Service: `Custom...`
+   - Server: `rtmp://localhost:1935/app`
+   - Stream Key: `stream`
 
-Port Range
+2. Open **Settings** → **Output** (Advanced mode)
+   - **Encoder**: NVIDIA NVENC H.264 (or AV1 if supported)
+   - **Rate Control**: CBR
+   - **Bitrate**: 6000-20000 Kbps (higher = better quality)
+   - **Keyframe Interval**: `1` ⚠️ **CRITICAL** - Don't use 0 or Auto!
+   - **Preset**: P1/P2 (Low Latency)
+   - **Tuning**: Ultra Low Latency
 
-Protocol
+3. Click **Start Streaming** in OBS
 
-Purpose
+### 3️⃣ Share the Player
 
-1935
+**Simply send `index.html` to your friends!**
 
-TCP
+They just:
+1. Download the file
+2. Double-click to open it in their browser
+3. The player automatically connects to your stream
+4. Watch with sub-second latency! 🎉
 
-RTMP Ingest (OBS to Server)
+---
 
-3333
+## 🌐 Network Setup
 
-TCP
+### For Local Testing (Same Network)
+No port forwarding needed! Friends on your local network can connect using your local IP.
 
-WebRTC Signalling (Handshake)
+### For Internet Streaming
+Forward these ports on your router to your PC's local IP:
 
-10000-10010
+| Port Range | Protocol | Purpose |
+|------------|----------|---------|
+| 1935 | TCP | RTMP input from OBS |
+| 3333 | TCP | WebRTC signaling |
+| 10000-10010 | UDP | WebRTC media transport |
 
-UDP
+**Find your public IP**: Visit [whatismyip.com](https://www.whatismyip.com)
 
-WebRTC Media Transport (Video/Audio)
+---
 
-Note: If testing locally on the same network, port forwarding is not required.
+## � Customization
 
-📹 OBS Studio Configuration
+### Change Your Public IP
 
-Configure OBS to send a low-latency stream to your local Docker container.
+If your IP changes, update it in:
 
-Open Settings -> Stream.
+**`docker-compose.yml`** (line 14):
+```yaml
+- OME_HOST_IP=YOUR_NEW_IP
+```
 
-Service: Custom...
+**`index.html`** (line 138):
+```javascript
+hostInput.value = localStorage.getItem('ome_host') || 'YOUR_NEW_IP';
+```
 
-Server: rtmp://localhost:1935/app
+Then restart:
+```bash
+docker-compose restart
+```
 
-Stream Key: stream
+---
 
-Open Settings -> Output (Set Output Mode to Advanced).
+## 📂 Project Structure
 
-Encoder: NVIDIA NVENC H.264 (or AV1 if available/supported).
+```
+GeminiStreamer/
+├── docker-compose.yml       # Docker configuration
+├── index.html               # Web player (share this file!)
+├── origin_conf/
+│   ├── Server.xml          # OvenMediaEngine config
+│   ├── server.crt          # SSL cert (for future use)
+│   └── server.key          # SSL key
+└── README.md
+```
 
-Rate Control: CBR (Constant Bitrate).
+---
 
-Bitrate: 6000 Kbps (up to 20000 Kbps for high quality).
+## 🐛 Troubleshooting
 
-Keyframe Interval: 1 s <span style="color:red">(CRITICAL)</span>.
+### ❌ Docker won't start
+**Error**: "docker daemon is not running"  
+**Fix**: Launch **Docker Desktop** and wait for it to fully start
 
-Setting this to 0 or Auto will cause massive latency buffering.
+### ❌ Stream won't connect
+**Symptoms**: Connection timeout, "failed to connect"  
+**Fix**:
+- Verify ports 3333 (TCP) and 10000-10010 (UDP) are forwarded
+- Check Windows Firewall allows these ports
+- Confirm OBS is streaming (should show green square)
+- Run: `docker logs prostream-engine` to check for errors
 
-Preset: P1 or P2 (Fastest/Low Latency).
+### ❌ High latency (>2 seconds)
+**Fix**: 
+- Set OBS **Keyframe Interval** to exactly `1` (not 0, not auto)
+- Lower your OBS bitrate if network is slow
+- Check that UDP ports are open (WebRTC needs UDP)
 
-Tuning: Ultra Low Latency.
+### ❌ Black screen / no video
+**Fix**:
+- Verify OBS is actually streaming
+- Check browser console (F12) for errors
+- Ensure you're using the correct IP address
+- Try refreshing the player page
 
-Multipass Mode: Single Pass.
+---
 
-🌐 Viewer Configuration
+## 💡 Tips
 
-Host the Web Player:
+- **Best quality**: Use NVENC at 15-20 Mbps with keyframe=1s
+- **Mobile-friendly**: Lower bitrate to 3-6 Mbps for viewers on phones
+- **Multiple viewers**: OvenMediaEngine can handle dozens of simultaneous connections
+- **Bookmark the player**: Friends can save the local HTML file and reuse it
 
-You can host the index.html file on GitHub Pages, Netlify, or a simple local server (python -m http.server).
+---
 
-Connect:
+## 📝 Requirements
 
-Open the hosted page.
+- **Docker Desktop** (Windows/Mac) or Docker Engine (Linux)
+- **OBS Studio** or any RTMP-capable encoder
+- **Modern web browser** (Chrome, Firefox, Edge, Safari)
+- **Port forwarding access** (for internet streaming)
 
-Click the Gear Icon ⚙️.
+---
 
-Host: Enter your Public IP (e.g., 104.6.x.x) if sharing, or localhost if testing.
+## 🌟 Built With
 
-Click Connect.
-
-🔧 Troubleshooting
-
-Docker Errors
-
-Error: "error during connect: This error may indicate that the docker daemon is not running."
-
-Fix: Launch Docker Desktop from your Start menu and wait for the icon to appear in the system tray.
-
-Black Screen / Connection Failed
-
-Symptom: The player says "Live" but shows black, or spins forever.
-
-Fix: This is almost always a firewall/port issue. Ensure UDP ports 10000-10010 are forwarded on your router and allowed through Windows Firewall.
-
-High Latency (>2 seconds)
-
-Fix: Check your OBS Output settings. Ensure Keyframe Interval is set to exactly 1s.
+- [OvenMediaEngine](https://github.com/AirenSoft/OvenMediaEngine) - Open-source WebRTC streaming server
+- [OvenPlayer](https://github.com/AirenSoft/OvenPlayer) - HTML5 WebRTC player
+- [Tailwind CSS](https://tailwindcss.com/) - Modern UI framework
