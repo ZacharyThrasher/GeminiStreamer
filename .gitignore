@@ -1,0 +1,11 @@
+# SSL Certificates (not needed for local file approach)
+origin_conf/server.key
+origin_conf/server.crt
+
+# Cloudflare Tunnel (not used)
+cloudflared.exe
+tunnel-config.yml
+
+# System files
+.DS_Store
+Thumbs.db
