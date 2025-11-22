@@ -445,24 +445,32 @@
                     viewerBitrate = parseInt(bandwidthSelect.value);
                 }
 
-                // SDP Munging Logic for specific bitrate (Robust)
+                // Advanced SDP Munging for High Bitrate
                 const options = {
                     sdpTransform: (sdp) => {
                         try {
+                            // 1. Prioritize VP9 (Better compression for high res)
+                            sdp = setCodecPreference(sdp, 'VP9');
+
+                            // 2. Set Aggressive Bitrate Limits
                             const kbps = Math.floor(viewerBitrate); 
                             
-                            // Use a safer regex that finds the m=video line and appends bandwidth below it
-                            // if not already present. This matches standard WebRTC SDP format better.
-                            // Look for m=video line, match until end of line.
+                            // Set 'b=AS' bandwidth for video
                             if (sdp.indexOf('m=video') !== -1) {
-                                // Replace existing b=AS line if it exists under video
+                                // Replace existing b=AS or insert it
                                 if (sdp.match(/m=video[\s\S]*?b=AS:\d+/)) {
-                                   return sdp.replace(/(m=video[\s\S]*?b=AS:)\d+/, `$1${kbps}`);
+                                   sdp = sdp.replace(/(m=video[\s\S]*?b=AS:)\d+/, `$1${kbps}`);
                                 } else {
-                                   // Insert b=AS line after m=video line
-                                   return sdp.replace(/(m=video.*)(\r\n)/, `$1$2b=AS:${kbps}$2`);
+                                   sdp = sdp.replace(/(m=video.*)(\r\n)/, `$1$2b=AS:${kbps}$2`);
                                 }
                             }
+
+                            // 3. Google-specific "Start Bitrate" hack to avoid slow ramp-up
+                            // This forces the browser to try sending high quality immediately
+                            // We find the video codec payload and add x-google parameters
+                            const minBitrate = Math.min(kbps, 5000); // 5Mbps min start
+                            sdp = sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\na=fmtp:96 x-google-min-bitrate=${minBitrate};x-google-max-bitrate=${kbps};x-google-start-bitrate=${minBitrate}\r\n`);
+
                             return sdp;
                         } catch (e) {
                             console.error("SDP Transform failed:", e);
@@ -489,18 +497,60 @@
             });
         }
 
+        // Helper to reorder codecs in SDP to prefer VP9
+        function setCodecPreference(sdp, codec) {
+            const lines = sdp.split('\r\n');
+            const mLineIndex = lines.findIndex(line => line.startsWith('m=video'));
+            if (mLineIndex === -1) return sdp;
+
+            // Extract payloads
+            const mLine = lines[mLineIndex];
+            const payloads = mLine.split(' ').slice(3);
+            
+            // Find payload types for the desired codec
+            const codecPayloads = [];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.startsWith('a=rtpmap:')) {
+                    if (line.includes(codec)) {
+                        const payload = line.split(':')[1].split(' ')[0];
+                        codecPayloads.push(payload);
+                    }
+                }
+            }
+
+            if (codecPayloads.length === 0) return sdp;
+
+            // Reconstruct m-line with preferred codec first
+            const otherPayloads = payloads.filter(p => !codecPayloads.includes(p));
+            const newPayloads = [...codecPayloads, ...otherPayloads];
+            lines[mLineIndex] = mLine.split(' ').slice(0, 3).join(' ') + ' ' + newPayloads.join(' ');
+
+            return lines.join('\r\n');
+        }
+
         async function getMediaStream() {
             const targetHeight = parseInt(resolutionSelect.value);
             
+            // Screen Capture Constraints
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
                     height: { ideal: targetHeight },
-                    frameRate: { ideal: 60 }
+                    frameRate: { ideal: 60 },
+                    // Hint to browser: prioritize detail (resolution) over frame drops
+                    // 'motion' is better for games, 'detail' is better for text/static.
+                    // Given high bandwidth, 'detail' prevents aggressive downscaling.
                 },
                 audio: true 
             });
 
-            const settings = displayStream.getVideoTracks()[0].getSettings();
+            // Apply Content Hint if supported (Chrome/Edge)
+            const videoTrack = displayStream.getVideoTracks()[0];
+            if ('contentHint' in videoTrack) {
+                videoTrack.contentHint = 'detail'; 
+            }
+
+            const settings = videoTrack.getSettings();
             if(settings.width) resDisplay.innerText = `${settings.width}x${settings.height}`;
 
             if (!micToggle.checked) return displayStream;
@@ -566,7 +616,6 @@
         function connectToHost(hostId, bitrate) {
             console.log(`Calling host ${hostId} requesting: ${bitrate} kbps`);
             
-            // Pass bitrate preference in metadata
             const call = peer.call(hostId, createDummyStream(), {
                 metadata: { bitrate: bitrate }
             });
@@ -575,7 +624,6 @@
                 updateStatus('Live Signal', 'green');
                 
                 mainVideo.srcObject = remoteStream;
-                // FIX: Mute initially to allow autoplay, then unmute
                 mainVideo.muted = true; 
                 unmuteOverlayBtn.classList.remove('hidden'); 
                 
@@ -586,7 +634,6 @@
                 
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
-                        // Play successful! Now try to unmute automatically
                         mainVideo.muted = false;
                         if (!mainVideo.muted) {
                             unmuteOverlayBtn.classList.add('hidden');
@@ -623,10 +670,7 @@
             }
         }
 
-        // UPDATED: Creates a dummy stream with both AUDIO and VIDEO tracks
-        // This forces the PeerConnection to properly negotiate video immediately
         function createDummyStream() {
-            // 1. Audio Track (Oscillator)
             const ctx = new AudioContext();
             const osc = ctx.createOscillator();
             const dst = ctx.createMediaStreamDestination();
@@ -635,7 +679,6 @@
             const audioTrack = dst.stream.getAudioTracks()[0];
             audioTrack.enabled = false;
 
-            // 2. Video Track (Canvas)
             const canvas = document.createElement('canvas');
             canvas.width = 640;
             canvas.height = 480;
