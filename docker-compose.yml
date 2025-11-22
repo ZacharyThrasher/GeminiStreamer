@@ -1,35 +1,21 @@
-version: '3.8'
-
 services:
   ovenmediaengine:
     image: airensoft/ovenmediaengine:latest
     container_name: prostream-engine
     restart: always
     ports:
-      # RTMP Provider (Input from OBS)
-      - "1935:1935"
-      
-      # WebRTC Signalling (Output to Browser)
-      - "3333:3333"
-      
-      # API/Management (Optional)
-      - "8081:8081"
-      
-      # SRT Provider (Low Latency Input Option)
-      - "9999:9999/udp"
-      
-      # WebRTC UDP Ports (ICE Candidates) - CRITICAL for streaming
-      - "10000-10010:10000-10010/udp"
+      - "1935:1935"       # RTMP In
+      - "3333:3333"       # WebRTC HTTP
+      - "3334:3334"       # WebRTC HTTPS (Secure)
+      - "8081:8081"       # API
+      - "9999:9999/udp"   # SRT
+      - "10000-10010:10000-10010/udp" # ICE/Media
 
     environment:
-      - OME_HOST_IP=104.6.177.38  # REPLACE WITH YOUR PUBLIC IP IF DIFFERENT
+      # OME needs to know your Public IP to put in the SDP handshake
+      - OME_HOST_IP=104.6.177.38  
       - OME_LOG_LEVEL=info
-    
-    # We mount a custom config to enable WebRTC and RTMP
-    # If you don't want to manage a config file, the default image 
-    # works out of the box for basic RTMP->WebRTC.
-    # Just ensure you map the ports correctly.
-    
-    # For advanced users wanting to persist config:
-    # volumes:
-    #   - ./origin_conf:/opt/ovenmediaengine/bin/origin_conf
+
+    volumes:
+      # CRITICAL: This loads your Server.xml and Certs into the container
+      - ./origin_conf:/opt/ovenmediaengine/bin/origin_conf

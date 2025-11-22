@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Server version="8">
+	<Name>OvenMediaEngine</Name>
+	<Type>origin</Type>
+	<IP>*</IP>
+	<PrivacyProtection>false</PrivacyProtection>
+
+	<Bind>
+		<Providers>
+			<RTMP>
+				<Port>1935</Port>
+			</RTMP>
+			<SRT>
+				<Port>9999</Port>
+				<WorkerCount>1</WorkerCount>
+			</SRT>
+			<WebRTC>
+				<Signalling>
+					<Port>3333</Port>
+					<TLSPort>3334</TLSPort>
+				</Signalling>
+				<IceCandidates>
+					<TcpRelay>*:3478</TcpRelay>
+					<TcpRelay>*:3479</TcpRelay>
+					<IceCandidate>*:10000-10010/udp</IceCandidate>
+				</IceCandidates>
+			</WebRTC>
+		</Providers>
+
+		<Managers>
+			<!-- API Server disabled -->
+		</Managers>
+	</Bind>
+
+	<VirtualHosts>
+		<VirtualHost include="VHost*.xml">
+			<Name>default</Name>
+			<Distribution>ovenmediaengine.com/ull</Distribution>
+			
+			<Host>
+				<Names>
+					<Name>*</Name>
+				</Names>
+				<TLS>
+					<CertPath>origin_conf/server.crt</CertPath>
+					<KeyPath>origin_conf/server.key</KeyPath>
+					<ChainCertPath>origin_conf/server.crt</ChainCertPath>
+				</TLS>
+			</Host>
+
+			<Applications>
+				<Application>
+					<Name>app</Name>
+					<Type>Live</Type>
+					<OutputProfiles>
+						<HardwareAcceleration>false</HardwareAcceleration>
+						<OutputProfile>
+							<Name>stream</Name>
+							<OutputStreamName>${OriginStreamName}</OutputStreamName>
+							<Encodes>
+								<Video>
+									<Bypass>true</Bypass>
+								</Video>
+								<Audio>
+									<Bypass>true</Bypass>
+								</Audio>
+							</Encodes>
+						</OutputProfile>
+					</OutputProfiles>
+					<Providers>
+						<OVT />
+						<WebRTC />
+						<RTMP />
+						<SRT />
+					</Providers>
+					<Publishers>
+						<AppWorker />
+						<WebRTC />
+					</Publishers>
+				</Application>
+			</Applications>
+		</VirtualHost>
+	</VirtualHosts>
+</Server>

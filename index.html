@@ -10,7 +10,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #0f0f0f; }
-        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1a1a; }
         ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
@@ -25,16 +24,26 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             border: 1px solid #333;
         }
-        
-        /* OvenPlayer Overrides for Dark Theme */
-        .op-setting-panel, .op-context-panel {
-            background: rgba(20, 20, 20, 0.95) !important;
-            backdrop-filter: blur(10px);
-            border: 1px solid #333;
-        }
     </style>
 </head>
 <body class="text-gray-200 h-screen flex flex-col overflow-hidden">
+
+    <!-- Cert Warning Banner (Hidden by default) -->
+    <div id="certWarning" class="hidden bg-red-900/50 border-b border-red-500/50 text-red-200 px-4 py-3 text-sm text-center font-bold relative z-50">
+        <div class="flex items-center justify-center gap-2">
+            <i class="fa-solid fa-lock"></i>
+            <span>SSL Connection Failed. Since you are using a self-signed cert, you MUST accept it manually.</span>
+        </div>
+        <div class="mt-2">
+            <a id="certLink" href="#" target="_blank" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs transition-colors">
+                1. Click here to open Secure Port
+            </a>
+            <span class="mx-2 text-xs font-normal opacity-70">-> Click "Advanced" -> "Proceed to..." -> Close tab</span>
+            <button onclick="location.reload()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs transition-colors ml-2">
+                2. Refresh this page
+            </button>
+        </div>
+    </div>
 
     <!-- Header -->
     <header class="bg-[#161616] border-b border-[#262626] p-4 z-20">
@@ -65,12 +74,8 @@
 
     <!-- Main Content -->
     <main class="flex-1 container mx-auto p-4 flex flex-col items-center justify-center relative">
-        
-        <!-- Player Container -->
         <div id="playerContainer" class="player-wrapper relative group">
             <div id="player"></div>
-            
-            <!-- Placeholder -->
             <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] z-10">
                 <div class="w-24 h-24 rounded-full bg-[#161616] border border-[#262626] flex items-center justify-center mb-6 shadow-2xl">
                     <i class="fa-solid fa-tv text-4xl text-gray-600"></i>
@@ -79,27 +84,6 @@
                 <p class="text-gray-600 text-sm">Waiting for stream configuration...</p>
             </div>
         </div>
-
-        <!-- Stats Overlay -->
-        <div class="mt-6 w-full max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-4 text-center opacity-50 hover:opacity-100 transition-opacity">
-            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
-                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Protocol</div>
-                <div id="statProtocol" class="text-sm font-mono text-indigo-400">--</div>
-            </div>
-            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
-                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Resolution</div>
-                <div id="statRes" class="text-sm font-mono text-green-400">--</div>
-            </div>
-            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
-                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Bitrate</div>
-                <div id="statBitrate" class="text-sm font-mono text-blue-400">--</div>
-            </div>
-            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
-                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Latency</div>
-                <div id="statLatency" class="text-sm font-mono text-yellow-400">--</div>
-            </div>
-        </div>
-
     </main>
 
     <!-- Configuration Modal -->
@@ -109,63 +93,43 @@
                 <h3 class="text-xl font-bold text-white">Connection Settings</h3>
                 <button onclick="closeSettings()" class="text-gray-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
             </div>
-
             <div class="space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Server Host (IP or Domain)</label>
                     <input type="text" id="hostInput" placeholder="e.g., 104.6.177.38" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
-                    <p class="text-[10px] text-gray-600 mt-1">Your public IP or domain running OME.</p>
                 </div>
-
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">App Name</label>
                     <input type="text" id="appInput" value="app" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
                 </div>
-
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Stream Key</label>
                     <input type="text" id="streamInput" value="stream" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
                 </div>
-
                 <div class="pt-4">
                     <button onclick="initializePlayer()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
                         <i class="fa-solid fa-play"></i> Connect
                     </button>
-                </div>
-                
-                <div class="text-center border-t border-[#333] pt-4">
-                    <p class="text-[10px] text-gray-500">
-                        Uses WebRTC via OvenMediaEngine (Port 3333/TCP)
-                    </p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- DOM Elements ---
         const configModal = document.getElementById('configModal');
         const hostInput = document.getElementById('hostInput');
         const appInput = document.getElementById('appInput');
         const streamInput = document.getElementById('streamInput');
         const placeholder = document.getElementById('placeholder');
         const statusIndicator = document.getElementById('statusIndicator');
+        const certWarning = document.getElementById('certWarning');
+        const certLink = document.getElementById('certLink');
         
-        // Stats
-        const statProtocol = document.getElementById('statProtocol');
-        const statRes = document.getElementById('statRes');
-        const statBitrate = document.getElementById('statBitrate');
-        const statLatency = document.getElementById('statLatency');
-
         let player = null;
 
-        // --- Logic ---
-
-        // 1. Check URL params for auto-connect
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             const host = params.get('host');
-            
             if (host) {
                 hostInput.value = host;
                 if(params.get('app')) appInput.value = params.get('app');
@@ -173,108 +137,66 @@
                 configModal.classList.add('hidden');
                 initializePlayer();
             } else {
-                // Try to load from local storage or set default
                 hostInput.value = localStorage.getItem('ome_host') || window.location.hostname;
             }
         });
 
-        function openSettings() {
-            configModal.classList.remove('hidden');
-        }
-
-        function closeSettings() {
-            configModal.classList.add('hidden');
-        }
+        function openSettings() { configModal.classList.remove('hidden'); }
+        function closeSettings() { configModal.classList.add('hidden'); }
 
         function initializePlayer() {
             const host = hostInput.value.trim();
             const app = appInput.value.trim();
             const stream = streamInput.value.trim();
 
-            if (!host) {
-                alert("Please enter a Host IP.");
-                return;
-            }
-
-            // Save for next time
+            if (!host) { alert("Please enter a Host IP."); return; }
             localStorage.setItem('ome_host', host);
             
-            // Update URL for sharing without reloading
             const newUrl = `${window.location.pathname}?host=${host}&app=${app}&stream=${stream}`;
             window.history.pushState({path:newUrl},'',newUrl);
 
             closeSettings();
             placeholder.classList.add('hidden');
+            certWarning.classList.add('hidden');
 
-            // Construct WebRTC URL for OvenMediaEngine
-            // Standard OME WebRTC port is 3333
-            const wsUrl = `ws://${host}:3333/${app}/${stream}`;
-            const wssUrl = `wss://${host}:3333/${app}/${stream}`; // If using SSL
-
-            // Configure OvenPlayer
-            if (player) {
-                player.remove();
+            // Logic: If page is HTTPS, use WSS/3334. If HTTP, use WS/3333.
+            let protocol = 'ws://';
+            let port = '3333';
+            
+            if (location.protocol === 'https:') {
+                protocol = 'wss://';
+                port = '3334';
+                // Set the warning link just in case it fails
+                certLink.href = `https://${host}:${port}`;
             }
 
+            const url = `${protocol}${host}:${port}/${app}/${stream}`;
+            console.log("Connecting to:", url);
+
+            if (player) player.remove();
+
             player = OvenPlayer.create('player', {
-                sources: [
-                    {
-                        label: 'WebRTC (Low Latency)',
-                        type: 'webrtc',
-                        file: (location.protocol === 'https:') ? wssUrl : wsUrl
-                    }
-                ],
+                sources: [{ label: 'WebRTC', type: 'webrtc', file: url }],
                 autoStart: true,
-                mute: true, // Start muted to handle autoplay policies
-                expandFullScreenUI: true,
-                showBigPlayButton: true
+                mute: true,
+                expandFullScreenUI: true
             });
 
-            setupEvents();
-        }
-
-        function setupEvents() {
-            player.on('ready', () => {
-                updateStatus('Ready', 'yellow');
-            });
-
+            player.on('ready', () => updateStatus('Ready', 'yellow'));
             player.on('stateChanged', (data) => {
-                if (data.newstate === 'playing') {
-                    updateStatus('Live', 'green');
-                } else if (data.newstate === 'idle' || data.newstate === 'error') {
-                    updateStatus('Offline', 'red');
-                }
+                if (data.newstate === 'playing') updateStatus('Live', 'green');
+                else if (data.newstate === 'idle' || data.newstate === 'error') updateStatus('Offline', 'red');
             });
 
             player.on('error', (error) => {
-                console.error(error);
+                console.error("OvenPlayer Error:", error);
                 updateStatus('Error', 'red');
-            });
-
-            // Poll for stats
-            setInterval(() => {
-                if (player && player.getState() === 'playing') {
-                    const stats = player.getStats();
-                    if (stats) {
-                        // Note: OvenPlayer stats object structure depends on version/transport
-                        // This is a best-effort mapping
-                        
-                        // Resolution
-                        if (player.getQuality) {
-                            // Some versions expose quality directly
-                        } 
-                        const videoEl = document.querySelector('video');
-                        if (videoEl) {
-                            statRes.innerText = `${videoEl.videoWidth}x${videoEl.videoHeight}`;
-                        }
-
-                        // Bitrate/Latency (if available in stats object)
-                        if(stats.video) {
-                           statBitrate.innerText = (stats.video.bitrate / 1000).toFixed(1) + ' Mbps'; 
-                        }
-                    }
+                
+                // Detect SSL handshake failure (common with self-signed certs)
+                if (location.protocol === 'https:' && error.code === 501) {
+                    certWarning.classList.remove('hidden');
                 }
-            }, 1000);
+            });
         }
 
         function updateStatus(text, color) {
@@ -283,17 +205,9 @@
                 'green': 'bg-green-900/20 text-green-500 border-green-900/30',
                 'yellow': 'bg-yellow-900/20 text-yellow-500 border-yellow-900/30'
             };
-            const dotColors = {
-                'red': 'bg-red-500',
-                'green': 'bg-green-500',
-                'yellow': 'bg-yellow-500'
-            };
-
+            const dotColors = { 'red': 'bg-red-500', 'green': 'bg-green-500', 'yellow': 'bg-yellow-500' };
             statusIndicator.className = `flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${colors[color]}`;
-            statusIndicator.innerHTML = `
-                <div class="w-2 h-2 rounded-full ${dotColors[color]} ${color === 'green' || color === 'red' ? 'animate-pulse' : ''}"></div>
-                <span>${text}</span>
-            `;
+            statusIndicator.innerHTML = `<div class="w-2 h-2 rounded-full ${dotColors[color]} ${color === 'green' ? 'animate-pulse' : ''}"></div><span>${text}</span>`;
         }
     </script>
 </body>
