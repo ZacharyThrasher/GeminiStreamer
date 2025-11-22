@@ -198,8 +198,9 @@
                         <label class="block text-xs font-medium text-gray-400 mb-1">Max Resolution (Source)</label>
                         <div class="relative">
                             <select id="resolutionSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
+                                <option value="0" selected>Native (No Scaling)</option>
                                 <option value="720">HD (720p)</option>
-                                <option value="1080" selected>Full HD (1080p)</option>
+                                <option value="1080">Full HD (1080p)</option>
                                 <option value="1440">2K (1440p)</option>
                                 <option value="2160">4K (2160p)</option>
                             </select>
@@ -532,15 +533,19 @@
         async function getMediaStream() {
             const targetHeight = parseInt(resolutionSelect.value);
             
+            // Setup constraints
+            const videoConstraints = {
+                frameRate: { ideal: 60 }
+            };
+
+            // Only apply height constraint if specific resolution selected (not Native/0)
+            if (targetHeight > 0) {
+                videoConstraints.height = { ideal: targetHeight };
+            }
+
             // Screen Capture Constraints
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    height: { ideal: targetHeight },
-                    frameRate: { ideal: 60 },
-                    // Hint to browser: prioritize detail (resolution) over frame drops
-                    // 'motion' is better for games, 'detail' is better for text/static.
-                    // Given high bandwidth, 'detail' prevents aggressive downscaling.
-                },
+                video: videoConstraints,
                 audio: true 
             });
 
