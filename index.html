@@ -298,7 +298,21 @@
     <script>
         // --- Configuration ---
         const PEER_CONFIG = {
-            debug: 1 // Reduced debug noise
+            debug: 0 // Production mode - no metadata leaks
+        };
+
+        // --- Constants ---
+        const CONSTANTS = {
+            MIC_GAIN: 1.5,
+            DUMMY_STREAM_FPS: 30,
+            DUMMY_CANVAS_WIDTH: 640,
+            DUMMY_CANVAS_HEIGHT: 480,
+            IDEAL_FRAMERATE: 60,
+            MIN_BITRATE_KBPS: 500,
+            MAX_BITRATE_KBPS: 50000,
+            BITRATE_STEP: 500,
+            DEFAULT_BITRATE_KBPS: 2500,
+            COPY_FEEDBACK_DURATION: 2000
         };
 
         // --- DOM Elements ---
@@ -328,36 +342,114 @@
         const sliderValueDisplay = document.getElementById('sliderValueDisplay');
         const maxQualityCheck = document.getElementById('maxQualityCheck');
 
-        // --- State ---
-        let peer = null;
-        let myStream = null;
-        let audioContext = null;
-        let audioDestination = null;
-        let connections = [];
-        let isHost = true;
-        let targetHostId = null;
+        // --- State Management ---
+        const AppState = {
+            IDLE: 'idle',
+            CONNECTING: 'connecting',
+            CONNECTED: 'connected',
+            BROADCASTING: 'broadcasting',
+            ERROR: 'error',
+            DISCONNECTED: 'disconnected'
+        };
+
+        class StreamManager {
+            constructor() {
+                this.peer = null;
+                this.stream = null;
+                this.audioContext = null;
+                this.audioDestination = null;
+                this.connections = [];
+                this.state = AppState.IDLE;
+                this.isHost = true;
+                this.targetHostId = null;
+            }
+
+            setState(newState) {
+                console.log(`State transition: ${this.state} -> ${newState}`);
+                this.state = newState;
+            }
+
+            getState() {
+                return this.state;
+            }
+
+            addConnection(connection) {
+                this.connections.push(connection);
+            }
+
+            removeConnection(connection) {
+                this.connections = this.connections.filter(c => c !== connection);
+            }
+
+            getConnectionCount() {
+                return this.connections.length;
+            }
+
+            cleanup() {
+                // Clean up peer
+                if (this.peer) {
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+
+                // Stop all media tracks
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => {
+                        track.stop();
+                        track.enabled = false;
+                    });
+                    this.stream = null;
+                }
+
+                // Close audio context
+                if (this.audioContext) {
+                    this.audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+                    this.audioContext = null;
+                }
+
+                // Clear audio destination
+                this.audioDestination = null;
+
+                // Clean up connections
+                this.connections.forEach(conn => {
+                    try {
+                        conn.close();
+                    } catch (err) {
+                        console.warn('Connection close error:', err);
+                    }
+                });
+                this.connections = [];
+            }
+        }
+
+        // --- Global Instance ---
+        const streamManager = new StreamManager();
 
         // --- Initialization ---
         const urlParams = new URLSearchParams(window.location.search);
         const hostIdToConnect = urlParams.get('watch');
 
         if (hostIdToConnect) {
-            targetHostId = hostIdToConnect;
+            streamManager.targetHostId = hostIdToConnect;
+            streamManager.isHost = false;
             initLobbyMode();
         } else {
+            streamManager.isHost = true;
             initHostMode();
         }
 
         // --- LOBBY LOGIC ---
         function initLobbyMode() {
-            isHost = false;
+            streamManager.setState(AppState.IDLE);
             controlPanel.classList.add('hidden');
             viewerLobby.classList.remove('hidden');
             updateStatus('Waiting for selection...', 'yellow');
 
-            // Slider events
+            // Slider events with validation
             bitrateSlider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
+                const val = Math.max(CONSTANTS.MIN_BITRATE_KBPS, 
+                                    Math.min(CONSTANTS.MAX_BITRATE_KBPS, 
+                                    parseInt(e.target.value) || CONSTANTS.DEFAULT_BITRATE_KBPS));
                 sliderValueDisplay.innerText = (val / 1000).toFixed(1) + ' Mbps';
             });
 
@@ -385,6 +477,7 @@
             }
 
             viewerLobby.classList.add('hidden');
+            streamManager.setState(AppState.CONNECTING);
             updateStatus('Connecting...', 'yellow');
             qualityTag.innerText = label;
 
@@ -394,38 +487,42 @@
         // --- HOST MODE LOGIC ---
 
         function initHostMode() {
-            isHost = true;
+            streamManager.setState(AppState.IDLE);
             
             startBtn.addEventListener('click', async () => {
                 startBtn.disabled = true;
                 startBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Initializing...';
+                streamManager.setState(AppState.CONNECTING);
 
                 try {
-                    myStream = await getMediaStream();
+                    streamManager.stream = await getMediaStream();
                     
-                    mainVideo.srcObject = myStream;
+                    mainVideo.srcObject = streamManager.stream;
                     mainVideo.muted = true;
                     placeholder.classList.add('hidden');
                     videoOverlay.classList.remove('hidden');
                     qualityTag.innerText = "Host (Source)";
                     
-                    peer = new Peer(generateRandomId(), PEER_CONFIG);
+                    streamManager.peer = new Peer(generateRandomId(), PEER_CONFIG);
 
-                    peer.on('open', (id) => {
+                    streamManager.peer.on('open', (id) => {
                         console.log('Host ID:', id);
+                        streamManager.setState(AppState.BROADCASTING);
                         updateStatus('Broadcasting', 'red');
                         enableLiveUI(id);
                         setupHostEvents();
                     });
 
-                    peer.on('error', (err) => {
-                        console.error(err);
+                    streamManager.peer.on('error', (err) => {
+                        console.error('Peer error:', err);
+                        streamManager.setState(AppState.ERROR);
                         alert("Connection Error: " + err.type);
                         resetUI();
                     });
 
                 } catch (err) {
                     console.error("Start Error:", err);
+                    streamManager.setState(AppState.ERROR);
                     alert("Could not start capture: " + err.message);
                     resetUI();
                 }
@@ -435,7 +532,7 @@
         }
 
         function setupHostEvents() {
-            peer.on('call', (call) => {
+            streamManager.peer.on('call', (call) => {
                 console.log("Incoming connection:", call.metadata);
                 
                 // Read requested bitrate from metadata
@@ -481,18 +578,18 @@
                 };
 
                 console.log(`Answering with limit: ${viewerBitrate} kbps`);
-                call.answer(myStream, options);
+                call.answer(streamManager.stream, options);
                 
-                connections.push(call);
+                streamManager.addConnection(call);
                 updateViewerCount();
 
                 call.on('close', () => {
-                    connections = connections.filter(c => c !== call);
+                    streamManager.removeConnection(call);
                     updateViewerCount();
                 });
                 
                 call.on('error', () => {
-                    connections = connections.filter(c => c !== call);
+                    streamManager.removeConnection(call);
                     updateViewerCount();
                 });
             });
@@ -531,11 +628,11 @@
         }
 
         async function getMediaStream() {
-            const targetHeight = parseInt(resolutionSelect.value);
+            const targetHeight = parseInt(resolutionSelect.value) || 0;
             
             // Setup constraints
             const videoConstraints = {
-                frameRate: { ideal: 60 }
+                frameRate: { ideal: CONSTANTS.IDEAL_FRAMERATE }
             };
 
             // Only apply height constraint if specific resolution selected (not Native/0)
@@ -544,10 +641,20 @@
             }
 
             // Screen Capture Constraints
-            const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: videoConstraints,
-                audio: true 
-            });
+            let displayStream;
+            try {
+                displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: videoConstraints,
+                    audio: true 
+                });
+            } catch (err) {
+                if (err.name === 'NotAllowedError') {
+                    throw new Error('Screen sharing permission denied');
+                } else if (err.name === 'NotFoundError') {
+                    throw new Error('No screen capture source available');
+                }
+                throw err;
+            }
 
             // Apply Content Hint if supported (Chrome/Edge)
             const videoTrack = displayStream.getVideoTracks()[0];
@@ -569,63 +676,85 @@
                     }
                 });
 
-                audioContext = new AudioContext();
-                audioDestination = audioContext.createMediaStreamDestination();
+                streamManager.audioContext = new AudioContext();
+                streamManager.audioDestination = streamManager.audioContext.createMediaStreamDestination();
 
                 if (displayStream.getAudioTracks().length > 0) {
-                    const sysSource = audioContext.createMediaStreamSource(displayStream);
-                    sysSource.connect(audioDestination);
+                    const sysSource = streamManager.audioContext.createMediaStreamSource(displayStream);
+                    sysSource.connect(streamManager.audioDestination);
                 }
 
-                const micSource = audioContext.createMediaStreamSource(micStream);
-                const micGain = audioContext.createGain();
-                micGain.gain.value = 1.5; 
-                micSource.connect(micGain).connect(audioDestination);
+                const micSource = streamManager.audioContext.createMediaStreamSource(micStream);
+                const micGain = streamManager.audioContext.createGain();
+                micGain.gain.value = CONSTANTS.MIC_GAIN; 
+                micSource.connect(micGain).connect(streamManager.audioDestination);
 
                 return new MediaStream([
                     ...displayStream.getVideoTracks(),
-                    ...audioDestination.stream.getAudioTracks()
+                    ...streamManager.audioDestination.stream.getAudioTracks()
                 ]);
 
             } catch (e) {
-                console.warn("Mic failed", e);
+                console.warn("Microphone access failed, using display audio only:", e);
+                // Clean up audio context if mic failed
+                if (streamManager.audioContext) {
+                    streamManager.audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+                    streamManager.audioContext = null;
+                    streamManager.audioDestination = null;
+                }
                 return displayStream;
             }
         }
 
         function stopBroadcast() {
-            if (peer) { peer.destroy(); peer = null; }
-            if (myStream) { myStream.getTracks().forEach(t => t.stop()); myStream = null; }
-            if (audioContext) { audioContext.close(); }
-            connections = [];
+            streamManager.cleanup();
+            streamManager.setState(AppState.IDLE);
             resetUI();
         }
 
         // --- VIEWER CONNECTION LOGIC ---
 
         function initViewerConnection(bitrate) {
-            peer = new Peer(null, PEER_CONFIG);
+            try {
+                streamManager.peer = new Peer(null, PEER_CONFIG);
 
-            peer.on('open', (id) => {
-                console.log("Viewer ID:", id);
-                connectToHost(targetHostId, bitrate);
-            });
+                streamManager.peer.on('open', (id) => {
+                    console.log("Viewer ID:", id);
+                    connectToHost(streamManager.targetHostId, bitrate);
+                });
 
-            peer.on('error', (err) => {
-                alert("Connection Error: " + err.type);
+                streamManager.peer.on('error', (err) => {
+                    console.error('Peer connection error:', err);
+                    let errorMsg = 'Connection failed';
+                    if (err.type === 'peer-unavailable') {
+                        errorMsg = 'Host not found or offline';
+                    } else if (err.type === 'network') {
+                        errorMsg = 'Network connection failed';
+                    } else if (err.type === 'browser-incompatible') {
+                        errorMsg = 'Browser not supported';
+                    }
+                    alert(errorMsg + ': ' + err.type);
+                    streamManager.setState(AppState.ERROR);
+                    updateStatus('Error', 'gray');
+                    viewerLobby.classList.remove('hidden'); 
+                });
+            } catch (err) {
+                console.error('Failed to initialize peer:', err);
+                streamManager.setState(AppState.ERROR);
+                alert('Failed to initialize connection');
                 updateStatus('Error', 'gray');
-                viewerLobby.classList.remove('hidden'); 
-            });
+            }
         }
 
         function connectToHost(hostId, bitrate) {
             console.log(`Calling host ${hostId} requesting: ${bitrate} kbps`);
             
-            const call = peer.call(hostId, createDummyStream(), {
+            const call = streamManager.peer.call(hostId, createDummyStream(), {
                 metadata: { bitrate: bitrate }
             });
 
             call.on('stream', (remoteStream) => {
+                streamManager.setState(AppState.CONNECTED);
                 updateStatus('Live Signal', 'green');
                 
                 mainVideo.srcObject = remoteStream;
@@ -656,13 +785,16 @@
             });
 
             call.on('close', () => {
-                alert("Broadcast ended.");
-                location.reload();
+                updateStatus('Disconnected', 'gray');
+                if (confirm('Broadcast ended. Reload page?')) {
+                    location.reload();
+                }
             });
             
             call.on('error', (err) => {
-                console.error(err);
-                updateStatus('Disconnected', 'gray');
+                console.error('Call error:', err);
+                updateStatus('Connection Lost', 'gray');
+                alert('Lost connection to host');
             });
         }
         
@@ -685,9 +817,9 @@
             audioTrack.enabled = false;
 
             const canvas = document.createElement('canvas');
-            canvas.width = 640;
-            canvas.height = 480;
-            const stream = canvas.captureStream(30);
+            canvas.width = CONSTANTS.DUMMY_CANVAS_WIDTH;
+            canvas.height = CONSTANTS.DUMMY_CANVAS_HEIGHT;
+            const stream = canvas.captureStream(CONSTANTS.DUMMY_STREAM_FPS);
             const videoTrack = stream.getVideoTracks()[0];
             videoTrack.enabled = false;
 
@@ -728,6 +860,12 @@
             viewerCountEl.innerText = '0';
         }
 
+        function updateViewerCount() {
+            if (viewerCountEl) {
+                viewerCountEl.innerText = streamManager.getConnectionCount();
+            }
+        }
+
         function updateStatus(text, color) {
             statusText.innerText = text;
             statusDot.className = `w-2 h-2 rounded-full ${getColorClass(color)}`;
@@ -748,12 +886,25 @@
             return 'bg-gray-800 text-gray-400 border-gray-700';
         }
 
-        copyBtn.addEventListener('click', () => {
-            shareUrlInput.select();
-            document.execCommand('copy');
-            const originalIcon = copyBtn.innerHTML;
-            copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
-            setTimeout(() => copyBtn.innerHTML = originalIcon, 2000);
+        copyBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(shareUrlInput.value);
+                const originalIcon = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
+                setTimeout(() => copyBtn.innerHTML = originalIcon, CONSTANTS.COPY_FEEDBACK_DURATION);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+                // Fallback for older browsers
+                shareUrlInput.select();
+                try {
+                    document.execCommand('copy');
+                    const originalIcon = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
+                    setTimeout(() => copyBtn.innerHTML = originalIcon, CONSTANTS.COPY_FEEDBACK_DURATION);
+                } catch (fallbackErr) {
+                    alert('Failed to copy to clipboard');
+                }
+            }
         });
 
     </script>
