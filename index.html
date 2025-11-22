@@ -3,845 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProStream P2P Broadcast</title>
+    <title>ProStream: OvenPlayer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- OvenPlayer CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/ovenplayer/dist/ovenplayer.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- PeerJS for P2P Networking -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
-        .pulse-live {
-            animation: pulse-red 2s infinite;
+        body { background-color: #0f0f0f; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+        
+        .player-wrapper {
+            aspect-ratio: 16/9;
+            width: 100%;
+            max-height: 85vh;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            border: 1px solid #333;
         }
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-        }
-        /* Lobby Overlay */
-        .lobby-backdrop {
-            background: rgba(0, 0, 0, 0.95);
+        
+        /* OvenPlayer Overrides for Dark Theme */
+        .op-setting-panel, .op-context-panel {
+            background: rgba(20, 20, 20, 0.95) !important;
             backdrop-filter: blur(10px);
-        }
-        
-        /* Custom Range Slider Styles */
-        input[type=range] {
-            -webkit-appearance: none; 
-            background: transparent; 
-        }
-        
-        /* WebKit (Chrome, Safari, Edge) Thumb */
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: #6366f1; /* indigo-500 */
-            cursor: pointer;
-            margin-top: -6px; /* Centers thumb on track */
-            box-shadow: 0 0 0 4px rgba(30, 27, 75, 0.5); /* indigo-950 ring */
-            border: 2px solid white;
-        }
-        
-        /* WebKit Track */
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 8px;
-            cursor: pointer;
-            background: #374151; /* gray-700 */
-            border-radius: 4px;
-        }
-
-        /* Firefox Thumb */
-        input[type=range]::-moz-range-thumb {
-            height: 20px;
-            width: 20px;
-            border-radius: 50%;
-            background: #6366f1;
-            cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 0 0 4px rgba(30, 27, 75, 0.5);
-        }
-
-        /* Firefox Track */
-        input[type=range]::-moz-range-track {
-            width: 100%;
-            height: 8px;
-            cursor: pointer;
-            background: #374151;
-            border-radius: 4px;
-        }
-
-        input[type=range]:focus {
-            outline: none; 
+            border: 1px solid #333;
         }
     </style>
 </head>
-<body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden font-sans selection:bg-purple-500 selection:text-white">
+<body class="text-gray-200 h-screen flex flex-col overflow-hidden">
 
     <!-- Header -->
-    <header class="bg-gray-900 border-b border-gray-800 p-4 shadow-2xl z-20">
+    <header class="bg-[#161616] border-b border-[#262626] p-4 z-20">
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-purple-900/50">
-                    <i class="fa-solid fa-satellite-dish text-white text-lg"></i>
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-900/30">
+                    <i class="fa-solid fa-fire-burner text-white text-lg"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">
-                        ProStream <span class="text-gray-500 font-normal text-sm block">P2P Broadcast Station</span>
+                    <h1 class="text-xl font-bold text-white leading-none tracking-tight">
+                        ProStream <span class="text-indigo-400">OME</span>
                     </h1>
+                    <p class="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Sub-Second Latency</p>
                 </div>
             </div>
-            
-            <div class="flex items-center space-x-4">
-                <!-- Status Badge -->
-                <div id="statusBadge" class="flex items-center space-x-2 px-4 py-1.5 bg-gray-800 text-gray-400 rounded-full text-xs font-bold border border-gray-700 uppercase tracking-wider transition-colors">
-                    <div id="statusDot" class="w-2 h-2 bg-gray-500 rounded-full"></div>
-                    <span id="statusText">Offline</span>
+
+            <div class="flex items-center gap-4">
+                <div id="statusIndicator" class="flex items-center space-x-2 px-3 py-1 bg-red-900/20 text-red-500 rounded-full text-xs font-bold border border-red-900/30 uppercase tracking-wider">
+                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span>Disconnected</span>
                 </div>
+                <button onclick="openSettings()" class="text-gray-400 hover:text-white transition-colors">
+                    <i class="fa-solid fa-gear text-xl"></i>
+                </button>
             </div>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-6 overflow-hidden relative">
+    <main class="flex-1 container mx-auto p-4 flex flex-col items-center justify-center relative">
         
-        <!-- Viewer Lobby Overlay -->
-        <div id="viewerLobby" class="hidden absolute inset-0 z-50 lobby-backdrop flex items-center justify-center p-4">
-            <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-                <div class="w-20 h-20 bg-gray-800 rounded-full mx-auto flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/20">
-                    <i class="fa-solid fa-play text-3xl text-indigo-400 ml-1"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-white mb-2">Join Broadcast</h2>
-                <p class="text-gray-400 text-sm mb-8">Adjust the slider to match your internet speed.</p>
-                
-                <div class="space-y-6 text-left bg-gray-800/50 p-6 rounded-xl border border-gray-700">
-                    
-                    <div class="flex justify-between items-end mb-2">
-                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Target Bitrate</label>
-                        <span id="sliderValueDisplay" class="text-xl font-bold text-indigo-400">2.5 Mbps</span>
-                    </div>
-
-                    <!-- Range Slider -->
-                    <div class="relative w-full h-8 flex items-center justify-center">
-                        <input type="range" id="bitrateSlider" min="500" max="50000" step="500" value="2500" 
-                            class="w-full bg-transparent appearance-none cursor-pointer z-10 relative">
-                    </div>
-                    
-                    <div class="flex justify-between text-[10px] text-gray-500 font-mono mt-1">
-                        <span>0.5M</span>
-                        <span>10M</span>
-                        <span>25M</span>
-                        <span>50M</span>
-                    </div>
-
-                    <!-- Max Checkbox -->
-                    <div class="mt-4 flex items-center justify-between pt-4 border-t border-gray-700">
-                        <div class="flex items-center">
-                            <input id="maxQualityCheck" type="checkbox" class="w-4 h-4 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500 focus:ring-2">
-                            <label for="maxQualityCheck" class="ml-2 text-sm font-medium text-gray-300">Source Quality (Max)</label>
-                        </div>
-                        <span class="text-xs text-gray-500">Ignores slider</span>
-                    </div>
-                </div>
-
-                <button onclick="joinStream()" class="mt-8 w-full py-4 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-lg shadow-lg shadow-indigo-900/30 transform transition-all active:scale-95 flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-bolt"></i>
-                    Connect Now
-                </button>
-            </div>
-        </div>
-
-        <!-- Left Panel: Controls (Hidden in Viewer Mode) -->
-        <div id="controlPanel" class="w-full md:w-80 flex-shrink-0 flex flex-col gap-4 overflow-y-auto pb-4 transition-all duration-500">
+        <!-- Player Container -->
+        <div id="playerContainer" class="player-wrapper relative group">
+            <div id="player"></div>
             
-            <!-- Connection Card -->
-            <div class="bg-gray-900/50 backdrop-blur rounded-xl p-5 border border-gray-800 shadow-xl">
-                <h2 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Broadcast Control</h2>
-                
-                <div class="space-y-3">
-                    <button id="startBtn" class="w-full py-4 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-lg shadow-lg shadow-indigo-900/30 transform transition-all active:scale-95 flex items-center justify-center gap-2 group">
-                        <i class="fa-solid fa-signal group-hover:animate-ping text-xs"></i>
-                        <span>Start Broadcasting</span>
-                    </button>
-                    
-                    <button id="stopBtn" disabled class="w-full py-4 px-4 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transform transition-all active:scale-95 flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-power-off"></i>
-                        Stop Broadcast
-                    </button>
+            <!-- Placeholder -->
+            <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] z-10">
+                <div class="w-24 h-24 rounded-full bg-[#161616] border border-[#262626] flex items-center justify-center mb-6 shadow-2xl">
+                    <i class="fa-solid fa-tv text-4xl text-gray-600"></i>
                 </div>
-
-                <!-- Viewer Link (Appears when live) -->
-                <div id="shareSection" class="hidden mt-4 pt-4 border-t border-gray-800 animate-fade-in">
-                    <label class="block text-xs font-medium text-green-400 mb-2 flex items-center gap-2">
-                        <i class="fa-solid fa-link"></i> Share this link to friends:
-                    </label>
-                    <div class="flex gap-2">
-                        <input type="text" id="shareUrl" readonly class="w-full bg-gray-950 border border-green-900/50 text-gray-300 text-xs rounded p-2 focus:outline-none focus:border-green-500 font-mono">
-                        <button id="copyBtn" class="bg-gray-800 hover:bg-gray-700 text-white px-3 rounded border border-gray-700 transition-colors">
-                            <i class="fa-regular fa-copy"></i>
-                        </button>
-                    </div>
-                    <div id="viewerCount" class="mt-3 text-xs text-gray-400 flex items-center gap-2">
-                        <i class="fa-solid fa-users"></i>
-                        <span>Connected Viewers: <b class="text-white">0</b></span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Configuration -->
-            <div class="bg-gray-900/50 backdrop-blur rounded-xl p-5 border border-gray-800 shadow-xl flex-1">
-                <h2 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-4">Stream Settings</h2>
-                
-                <div class="space-y-5">
-                    <!-- Resolution -->
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Resolution (Source)</label>
-                        <div class="relative">
-                            <select id="resolutionSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
-                                <option value="0" selected>Native (No Scaling)</option>
-                                <option value="720">HD (720p)</option>
-                                <option value="1080">Full HD (1080p)</option>
-                                <option value="1440">2K (1440p)</option>
-                                <option value="2160">4K (2160p)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
-                        </div>
-                    </div>
-
-                    <!-- Bandwidth Limit -->
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Max Bandwidth (Source)</label>
-                        <div class="relative">
-                            <select id="bandwidthSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
-                                <option value="5000">High (5 Mbps)</option>
-                                <option value="10000">Ultra (10 Mbps)</option>
-                                <option value="50000">Extreme (50 Mbps)</option>
-                                <option value="500000" selected>Ludicrous (500 Mbps)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
-                        </div>
-                    </div>
-
-                    <!-- Optimization Mode -->
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Optimization Mode</label>
-                        <div class="relative">
-                            <select id="streamModeSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
-                                <option value="lossless" selected>Lossless (Raw)</option>
-                                <option value="motion">Gaming (Smoothed)</option>
-                                <option value="detail">Static (Text Clarity)</option>
-                            </select>
-                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
-                        </div>
-                        <p class="text-[10px] text-gray-600 mt-1">"Lossless" prevents downscaling. "Gaming" optimizes fps.</p>
-                    </div>
-
-                    <!-- Audio -->
-                    <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Audio Source</label>
-                        <div class="flex items-center justify-between bg-gray-950 p-3 rounded-lg border border-gray-800">
-                            <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-microphone-lines text-indigo-400"></i>
-                                <span class="text-sm text-gray-300">Mix Microphone</span>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="micToggle" class="sr-only peer">
-                                <div class="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                            </label>
-                        </div>
-                        
-                        <!-- Audio Isolation Hint -->
-                        <div class="mt-2 text-[10px] text-gray-500 leading-tight">
-                            <span class="text-yellow-500 font-bold">Tip:</span> 
-                            System Audio filters (Echo Cancellation) are disabled for high fidelity game sound.
-                        </div>
-                    </div>
-
-                    <div class="bg-indigo-900/10 border border-indigo-900/30 p-3 rounded-lg">
-                        <p class="text-[11px] text-indigo-300 leading-relaxed">
-                            <i class="fa-solid fa-microchip mr-1"></i>
-                            <strong>AV1/VP9 Enabled:</strong> Logic prioritized for GPU hardware encoding.
-                        </p>
-                    </div>
-                </div>
+                <h2 class="text-2xl font-bold text-gray-500 mb-2">Ready to Connect</h2>
+                <p class="text-gray-600 text-sm">Waiting for stream configuration...</p>
             </div>
         </div>
 
-        <!-- Right Panel: Video Feed -->
-        <div class="flex-1 flex flex-col overflow-hidden min-h-0 relative">
-            
-            <!-- Video Container -->
-            <div id="videoContainer" class="relative bg-black rounded-xl border border-gray-800 overflow-hidden shadow-2xl flex-1 flex items-center justify-center group">
-                
-                <video id="mainVideo" class="max-w-full max-h-full w-full h-full object-contain z-0" autoplay playsinline></video>
-                
-                <!-- Placeholder / Initial State -->
-                <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 z-0">
-                    <div class="w-32 h-32 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-500 shadow-2xl shadow-black">
-                        <i class="fa-solid fa-tower-broadcast text-5xl text-gray-700"></i>
-                    </div>
-                    <p class="text-xl font-bold text-gray-500">Signal Offline</p>
-                    <p class="text-sm opacity-50 mt-2">Waiting for source...</p>
-                </div>
-
-                <!-- Overlay Info -->
-                <div id="videoOverlay" class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm border border-white/10 px-3 py-1.5 rounded-md text-xs font-mono text-green-400 hidden z-20 flex items-center gap-3">
-                    <div class="flex items-center gap-1">
-                        <div class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                        <span class="font-bold text-white tracking-wider">LIVE</span>
-                    </div>
-                    <span class="text-gray-500">|</span>
-                    <span id="resDisplay">1080p</span>
-                    <span class="text-gray-500">|</span>
-                    <span id="qualityTag">Source</span>
-                    <span class="text-gray-500">|</span>
-                    <!-- Unmute Button Indicator -->
-                    <button id="unmuteOverlayBtn" onclick="toggleMute()" class="hidden text-white hover:text-indigo-400">
-                        <i class="fa-solid fa-volume-xmark"></i> <span class="ml-1">Unmute</span>
-                    </button>
-                </div>
-
-                <!-- Viewer Message -->
-                <div id="viewerMessage" class="absolute bottom-10 bg-indigo-600/90 text-white px-6 py-3 rounded-full font-bold shadow-lg transform translate-y-20 transition-transform duration-500 hidden z-30">
-                    Connected to Stream
-                </div>
-
-                <!-- Fullscreen Toggle -->
-                <button id="fullscreenBtn" onclick="toggleFullscreen()" class="absolute bottom-4 right-4 text-white hover:text-indigo-400 z-20 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-all hidden">
-                    <i class="fa-solid fa-expand text-lg"></i>
-                </button>
+        <!-- Stats Overlay -->
+        <div class="mt-6 w-full max-w-5xl grid grid-cols-2 md:grid-cols-4 gap-4 text-center opacity-50 hover:opacity-100 transition-opacity">
+            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
+                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Protocol</div>
+                <div id="statProtocol" class="text-sm font-mono text-indigo-400">--</div>
+            </div>
+            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
+                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Resolution</div>
+                <div id="statRes" class="text-sm font-mono text-green-400">--</div>
+            </div>
+            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
+                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Bitrate</div>
+                <div id="statBitrate" class="text-sm font-mono text-blue-400">--</div>
+            </div>
+            <div class="bg-[#161616] p-3 rounded-lg border border-[#262626]">
+                <div class="text-[10px] text-gray-500 uppercase tracking-widest">Latency</div>
+                <div id="statLatency" class="text-sm font-mono text-yellow-400">--</div>
             </div>
         </div>
+
     </main>
 
+    <!-- Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-[#161616] border border-[#333] rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white">Connection Settings</h3>
+                <button onclick="closeSettings()" class="text-gray-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Server Host (IP or Domain)</label>
+                    <input type="text" id="hostInput" placeholder="e.g., 104.6.177.38" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                    <p class="text-[10px] text-gray-600 mt-1">Your public IP or domain running OME.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">App Name</label>
+                    <input type="text" id="appInput" value="app" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Stream Key</label>
+                    <input type="text" id="streamInput" value="stream" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                </div>
+
+                <div class="pt-4">
+                    <button onclick="initializePlayer()" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-play"></i> Connect
+                    </button>
+                </div>
+                
+                <div class="text-center border-t border-[#333] pt-4">
+                    <p class="text-[10px] text-gray-500">
+                        Uses WebRTC via OvenMediaEngine (Port 3333/TCP)
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // --- Configuration ---
-        const PEER_CONFIG = {
-            debug: 1 // Reduced debug noise
-        };
-
         // --- DOM Elements ---
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const mainVideo = document.getElementById('mainVideo');
-        const videoContainer = document.getElementById('videoContainer');
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const configModal = document.getElementById('configModal');
+        const hostInput = document.getElementById('hostInput');
+        const appInput = document.getElementById('appInput');
+        const streamInput = document.getElementById('streamInput');
         const placeholder = document.getElementById('placeholder');
-        const controlPanel = document.getElementById('controlPanel');
-        const viewerLobby = document.getElementById('viewerLobby');
-        const statusBadge = document.getElementById('statusBadge');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const shareSection = document.getElementById('shareSection');
-        const shareUrlInput = document.getElementById('shareUrl');
-        const copyBtn = document.getElementById('copyBtn');
-        const viewerCountEl = document.querySelector('#viewerCount b');
-        const videoOverlay = document.getElementById('videoOverlay');
-        const resDisplay = document.getElementById('resDisplay');
-        const qualityTag = document.getElementById('qualityTag');
-        const micToggle = document.getElementById('micToggle');
-        const bandwidthSelect = document.getElementById('bandwidthSelect');
-        const resolutionSelect = document.getElementById('resolutionSelect');
-        const streamModeSelect = document.getElementById('streamModeSelect');
-        const unmuteOverlayBtn = document.getElementById('unmuteOverlayBtn');
+        const statusIndicator = document.getElementById('statusIndicator');
         
-        // Slider elements
-        const bitrateSlider = document.getElementById('bitrateSlider');
-        const sliderValueDisplay = document.getElementById('sliderValueDisplay');
-        const maxQualityCheck = document.getElementById('maxQualityCheck');
+        // Stats
+        const statProtocol = document.getElementById('statProtocol');
+        const statRes = document.getElementById('statRes');
+        const statBitrate = document.getElementById('statBitrate');
+        const statLatency = document.getElementById('statLatency');
 
-        // --- State ---
-        let peer = null;
-        let myStream = null;
-        let audioContext = null;
-        let audioDestination = null;
-        let connections = [];
-        let isHost = true;
-        let targetHostId = null;
+        let player = null;
 
-        // --- Initialization ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const hostIdToConnect = urlParams.get('watch');
+        // --- Logic ---
 
-        if (hostIdToConnect) {
-            targetHostId = hostIdToConnect;
-            initLobbyMode();
-        } else {
-            initHostMode();
-        }
-
-        // --- FULLSCREEN LOGIC ---
-        window.toggleFullscreen = function() {
-            if (!document.fullscreenElement) {
-                videoContainer.requestFullscreen().catch(err => {
-                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
-                });
+        // 1. Check URL params for auto-connect
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const host = params.get('host');
+            
+            if (host) {
+                hostInput.value = host;
+                if(params.get('app')) appInput.value = params.get('app');
+                if(params.get('stream')) streamInput.value = params.get('stream');
+                configModal.classList.add('hidden');
+                initializePlayer();
             } else {
-                document.exitFullscreen();
-            }
-        }
-
-        document.addEventListener('fullscreenchange', () => {
-            const icon = fullscreenBtn.querySelector('i');
-            if (document.fullscreenElement) {
-                icon.classList.remove('fa-expand');
-                icon.classList.add('fa-compress');
-                videoContainer.classList.remove('rounded-xl', 'border'); // Remove borders in fullscreen
-            } else {
-                icon.classList.remove('fa-compress');
-                icon.classList.add('fa-expand');
-                videoContainer.classList.add('rounded-xl', 'border'); // Restore borders
+                // Try to load from local storage or set default
+                hostInput.value = localStorage.getItem('ome_host') || window.location.hostname;
             }
         });
 
-        // --- LOBBY LOGIC ---
-        function initLobbyMode() {
-            isHost = false;
-            controlPanel.classList.add('hidden');
-            viewerLobby.classList.remove('hidden');
-            updateStatus('Waiting for selection...', 'yellow');
-
-            // Slider events
-            bitrateSlider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                sliderValueDisplay.innerText = (val / 1000).toFixed(1) + ' Mbps';
-            });
-
-            maxQualityCheck.addEventListener('change', (e) => {
-                if(e.target.checked) {
-                    bitrateSlider.disabled = true;
-                    bitrateSlider.classList.add('opacity-50', 'cursor-not-allowed');
-                    sliderValueDisplay.innerText = 'Max';
-                } else {
-                    bitrateSlider.disabled = false;
-                    bitrateSlider.classList.remove('opacity-50', 'cursor-not-allowed');
-                    sliderValueDisplay.innerText = (parseInt(bitrateSlider.value) / 1000).toFixed(1) + ' Mbps';
-                }
-            });
+        function openSettings() {
+            configModal.classList.remove('hidden');
         }
 
-        window.joinStream = function() {
-            // Determine bitrate
-            let requestedBitrate = parseInt(bitrateSlider.value);
-            let label = (requestedBitrate / 1000).toFixed(1) + ' Mbps';
+        function closeSettings() {
+            configModal.classList.add('hidden');
+        }
 
-            if (maxQualityCheck.checked) {
-                requestedBitrate = 'max'; // Sentinel value
-                label = 'Source';
+        function initializePlayer() {
+            const host = hostInput.value.trim();
+            const app = appInput.value.trim();
+            const stream = streamInput.value.trim();
+
+            if (!host) {
+                alert("Please enter a Host IP.");
+                return;
             }
 
-            viewerLobby.classList.add('hidden');
-            updateStatus('Connecting...', 'yellow');
-            qualityTag.innerText = label;
+            // Save for next time
+            localStorage.setItem('ome_host', host);
+            
+            // Update URL for sharing without reloading
+            const newUrl = `${window.location.pathname}?host=${host}&app=${app}&stream=${stream}`;
+            window.history.pushState({path:newUrl},'',newUrl);
 
-            initViewerConnection(requestedBitrate);
+            closeSettings();
+            placeholder.classList.add('hidden');
+
+            // Construct WebRTC URL for OvenMediaEngine
+            // Standard OME WebRTC port is 3333
+            const wsUrl = `ws://${host}:3333/${app}/${stream}`;
+            const wssUrl = `wss://${host}:3333/${app}/${stream}`; // If using SSL
+
+            // Configure OvenPlayer
+            if (player) {
+                player.remove();
+            }
+
+            player = OvenPlayer.create('player', {
+                sources: [
+                    {
+                        label: 'WebRTC (Low Latency)',
+                        type: 'webrtc',
+                        file: (location.protocol === 'https:') ? wssUrl : wsUrl
+                    }
+                ],
+                autoStart: true,
+                mute: true, // Start muted to handle autoplay policies
+                expandFullScreenUI: true,
+                showBigPlayButton: true
+            });
+
+            setupEvents();
         }
 
-        // --- HOST MODE LOGIC ---
+        function setupEvents() {
+            player.on('ready', () => {
+                updateStatus('Ready', 'yellow');
+            });
 
-        function initHostMode() {
-            isHost = true;
-            
-            startBtn.addEventListener('click', async () => {
-                startBtn.disabled = true;
-                startBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Initializing...';
-
-                try {
-                    myStream = await getMediaStream();
-                    
-                    mainVideo.srcObject = myStream;
-                    mainVideo.muted = true;
-                    placeholder.classList.add('hidden');
-                    videoOverlay.classList.remove('hidden');
-                    fullscreenBtn.classList.remove('hidden'); // Show fullscreen btn
-                    qualityTag.innerText = "Host (Source)";
-                    
-                    peer = new Peer(generateRandomId(), PEER_CONFIG);
-
-                    peer.on('open', (id) => {
-                        console.log('Host ID:', id);
-                        updateStatus('Broadcasting', 'red');
-                        enableLiveUI(id);
-                        setupHostEvents();
-                    });
-
-                    peer.on('error', (err) => {
-                        console.error(err);
-                        alert("Connection Error: " + err.type);
-                        resetUI();
-                    });
-
-                } catch (err) {
-                    console.error("Start Error:", err);
-                    alert("Could not start capture: " + err.message);
-                    resetUI();
+            player.on('stateChanged', (data) => {
+                if (data.newstate === 'playing') {
+                    updateStatus('Live', 'green');
+                } else if (data.newstate === 'idle' || data.newstate === 'error') {
+                    updateStatus('Offline', 'red');
                 }
             });
 
-            stopBtn.addEventListener('click', stopBroadcast);
-        }
+            player.on('error', (error) => {
+                console.error(error);
+                updateStatus('Error', 'red');
+            });
 
-        function setupHostEvents() {
-            peer.on('call', (call) => {
-                console.log("Incoming connection:", call.metadata);
-                
-                // Read requested bitrate from metadata
-                let viewerBitrate = call.metadata?.bitrate;
-                
-                // If 'max' or undefined, use host's max setting
-                if (!viewerBitrate || viewerBitrate === 'max') {
-                    viewerBitrate = parseInt(bandwidthSelect.value);
-                }
+            // Poll for stats
+            setInterval(() => {
+                if (player && player.getState() === 'playing') {
+                    const stats = player.getStats();
+                    if (stats) {
+                        // Note: OvenPlayer stats object structure depends on version/transport
+                        // This is a best-effort mapping
+                        
+                        // Resolution
+                        if (player.getQuality) {
+                            // Some versions expose quality directly
+                        } 
+                        const videoEl = document.querySelector('video');
+                        if (videoEl) {
+                            statRes.innerText = `${videoEl.videoWidth}x${videoEl.videoHeight}`;
+                        }
 
-                // Advanced SDP Munging for High Bitrate & AV1
-                const options = {
-                    sdpTransform: (sdp) => {
-                        try {
-                            // 1. Prioritize AV1, then VP9 (Better compression)
-                            sdp = setCodecPreference(sdp, 'AV1');
-                            sdp = setCodecPreference(sdp, 'VP9');
-
-                            // 2. Set Aggressive Bitrate Limits
-                            const kbps = Math.floor(viewerBitrate); 
-                            
-                            // Set 'b=AS' bandwidth for video
-                            if (sdp.indexOf('m=video') !== -1) {
-                                // Replace existing b=AS or insert it
-                                if (sdp.match(/m=video[\s\S]*?b=AS:\d+/)) {
-                                   sdp = sdp.replace(/(m=video[\s\S]*?b=AS:)\d+/, `$1${kbps}`);
-                                } else {
-                                   sdp = sdp.replace(/(m=video.*)(\r\n)/, `$1$2b=AS:${kbps}$2`);
-                                }
-                            }
-
-                            // 3. Google-specific "Start Bitrate" hack to avoid slow ramp-up
-                            // Increased min start bitrate to 30Mbps for high-speed connections
-                            const minBitrate = Math.min(kbps, 30000); // 30Mbps min start
-                            sdp = sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\na=fmtp:96 x-google-min-bitrate=${minBitrate};x-google-max-bitrate=${kbps};x-google-start-bitrate=${minBitrate}\r\n`);
-
-                            return sdp;
-                        } catch (e) {
-                            console.error("SDP Transform failed:", e);
-                            return sdp;
+                        // Bitrate/Latency (if available in stats object)
+                        if(stats.video) {
+                           statBitrate.innerText = (stats.video.bitrate / 1000).toFixed(1) + ' Mbps'; 
                         }
                     }
-                };
-
-                console.log(`Answering with limit: ${viewerBitrate} kbps`);
-                call.answer(myStream, options);
-                
-                connections.push(call);
-                updateViewerCount();
-
-                call.on('close', () => {
-                    connections = connections.filter(c => c !== call);
-                    updateViewerCount();
-                });
-                
-                call.on('error', () => {
-                    connections = connections.filter(c => c !== call);
-                    updateViewerCount();
-                });
-            });
-        }
-
-        // Helper to reorder codecs in SDP
-        function setCodecPreference(sdp, codec) {
-            const lines = sdp.split('\r\n');
-            const mLineIndex = lines.findIndex(line => line.startsWith('m=video'));
-            if (mLineIndex === -1) return sdp;
-
-            // Extract payloads
-            const mLine = lines[mLineIndex];
-            const payloads = mLine.split(' ').slice(3);
-            
-            // Find payload types for the desired codec
-            const codecPayloads = [];
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                if (line.startsWith('a=rtpmap:')) {
-                    if (line.includes(codec)) {
-                        const payload = line.split(':')[1].split(' ')[0];
-                        codecPayloads.push(payload);
-                    }
                 }
-            }
-
-            if (codecPayloads.length === 0) return sdp;
-
-            // Reconstruct m-line with preferred codec first
-            const otherPayloads = payloads.filter(p => !codecPayloads.includes(p));
-            const newPayloads = [...codecPayloads, ...otherPayloads];
-            lines[mLineIndex] = mLine.split(' ').slice(0, 3).join(' ') + ' ' + newPayloads.join(' ');
-
-            return lines.join('\r\n');
-        }
-
-        async function getMediaStream() {
-            const targetHeight = parseInt(resolutionSelect.value);
-            const mode = streamModeSelect.value;
-            
-            // Video Constraints
-            const videoConstraints = {
-                frameRate: { ideal: 60 },
-                cursor: 'always' // Always show cursor
-            };
-            
-            if (targetHeight > 0) {
-                videoConstraints.height = { ideal: targetHeight };
-            } else {
-                // Native mode: Ensure no resizing happens
-                videoConstraints.resizeMode = "none";
-            }
-
-            // 1. Get Display Media (Video + System Audio)
-            // We separate Audio constraints here for system audio
-            const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: videoConstraints,
-                audio: {
-                    // Crucial for Game Mode: Disable speech processing for system audio
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                    channelCount: 2 // Force Stereo
-                }
-            });
-
-            // Apply Content Hint (Motion vs Detail)
-            const videoTrack = displayStream.getVideoTracks()[0];
-            if ('contentHint' in videoTrack) {
-                if (mode === 'lossless') {
-                    // For lossless, DO NOT use 'motion' as it causes resolution downscaling.
-                    // Use 'detail' to prioritize resolution, or simply don't set it.
-                    // We set 'detail' to be safe against blur.
-                    videoTrack.contentHint = 'detail';
-                } else {
-                    videoTrack.contentHint = mode; // 'motion' or 'detail'
-                }
-            }
-
-            const settings = videoTrack.getSettings();
-            if(settings.width) resDisplay.innerText = `${settings.width}x${settings.height}`;
-
-            // If mic is OFF, we are done.
-            if (!micToggle.checked) return displayStream;
-
-            // If mic is ON, we need to mix.
-            try {
-                const micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-
-                audioContext = new AudioContext();
-                audioDestination = audioContext.createMediaStreamDestination();
-
-                // Add System Audio (Keep it clean/unprocessed)
-                if (displayStream.getAudioTracks().length > 0) {
-                    const sysSource = audioContext.createMediaStreamSource(displayStream);
-                    sysSource.connect(audioDestination);
-                }
-
-                // Add Mic Audio (This usually needs processing, which getUserMedia provides)
-                const micSource = audioContext.createMediaStreamSource(micStream);
-                const micGain = audioContext.createGain();
-                micGain.gain.value = 1.5; 
-                micSource.connect(micGain).connect(audioDestination);
-
-                return new MediaStream([
-                    ...displayStream.getVideoTracks(),
-                    ...audioDestination.stream.getAudioTracks()
-                ]);
-
-            } catch (e) {
-                console.warn("Mic failed", e);
-                return displayStream;
-            }
-        }
-
-        function stopBroadcast() {
-            if (peer) { peer.destroy(); peer = null; }
-            if (myStream) { myStream.getTracks().forEach(t => t.stop()); myStream = null; }
-            if (audioContext) { audioContext.close(); }
-            connections = [];
-            resetUI();
-        }
-
-        // --- VIEWER CONNECTION LOGIC ---
-
-        function initViewerConnection(bitrate) {
-            peer = new Peer(null, PEER_CONFIG);
-
-            peer.on('open', (id) => {
-                console.log("Viewer ID:", id);
-                connectToHost(targetHostId, bitrate);
-            });
-
-            peer.on('error', (err) => {
-                alert("Connection Error: " + err.type);
-                updateStatus('Error', 'gray');
-                viewerLobby.classList.remove('hidden'); 
-            });
-        }
-
-        function connectToHost(hostId, bitrate) {
-            console.log(`Calling host ${hostId} requesting: ${bitrate} kbps`);
-            
-            const call = peer.call(hostId, createDummyStream(), {
-                metadata: { bitrate: bitrate }
-            });
-
-            call.on('stream', (remoteStream) => {
-                updateStatus('Live Signal', 'green');
-                
-                mainVideo.srcObject = remoteStream;
-                
-                // LOW LATENCY HACK: Force Playback immediately to reduce buffer
-                if (mainVideo.playoutDelayHint !== undefined) {
-                    mainVideo.playoutDelayHint = 0; 
-                }
-
-                // FIX: Update resolution display dynamically based on actual incoming stream
-                const updateRes = () => {
-                    if (mainVideo.videoWidth && mainVideo.videoHeight) {
-                        resDisplay.innerText = `${mainVideo.videoWidth}x${mainVideo.videoHeight}`;
-                    }
-                };
-                mainVideo.addEventListener('loadedmetadata', updateRes);
-                mainVideo.addEventListener('resize', updateRes);
-                
-                mainVideo.muted = true; 
-                unmuteOverlayBtn.classList.remove('hidden'); 
-                
-                placeholder.classList.add('hidden');
-                videoOverlay.classList.remove('hidden');
-                fullscreenBtn.classList.remove('hidden'); 
-
-                const playPromise = mainVideo.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        mainVideo.muted = false;
-                        if (!mainVideo.muted) {
-                            unmuteOverlayBtn.classList.add('hidden');
-                        }
-                    }).catch(error => {
-                        console.warn("Autoplay prevented:", error);
-                        placeholder.innerHTML = '<button class="bg-indigo-600 text-white px-6 py-3 rounded-full font-bold shadow-lg hover:scale-105 transition-transform" onclick="mainVideo.muted=false; mainVideo.play(); this.parentElement.classList.add(\'hidden\')"><i class="fa-solid fa-play mr-2"></i> Click to Watch</button>';
-                        placeholder.classList.remove('hidden');
-                    });
-                }
-
-                const toast = document.getElementById('viewerMessage');
-                toast.classList.remove('hidden');
-                toast.classList.remove('translate-y-20');
-            });
-
-            call.on('close', () => {
-                alert("Broadcast ended.");
-                location.reload();
-            });
-            
-            call.on('error', (err) => {
-                console.error(err);
-                updateStatus('Disconnected', 'gray');
-            });
-        }
-        
-        window.toggleMute = function() {
-            mainVideo.muted = !mainVideo.muted;
-            if(mainVideo.muted) {
-                unmuteOverlayBtn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i> <span class="ml-1">Unmute</span>';
-            } else {
-                unmuteOverlayBtn.classList.add('hidden');
-            }
-        }
-
-        function createDummyStream() {
-            const ctx = new AudioContext();
-            const osc = ctx.createOscillator();
-            const dst = ctx.createMediaStreamDestination();
-            osc.connect(dst);
-            osc.start();
-            const audioTrack = dst.stream.getAudioTracks()[0];
-            audioTrack.enabled = false;
-
-            const canvas = document.createElement('canvas');
-            canvas.width = 640;
-            canvas.height = 480;
-            const stream = canvas.captureStream(30);
-            const videoTrack = stream.getVideoTracks()[0];
-            videoTrack.enabled = false;
-
-            return new MediaStream([audioTrack, videoTrack]);
-        }
-
-        // --- UI UTILS ---
-
-        function generateRandomId() {
-            return 'stream-' + Math.random().toString(36).substr(2, 4) + '-' + Math.random().toString(36).substr(2, 4);
-        }
-
-        function enableLiveUI(id) {
-            startBtn.innerHTML = '<i class="fa-solid fa-signal"></i> On Air';
-            startBtn.classList.add('animate-pulse');
-            stopBtn.disabled = false;
-            
-            const url = new URL(window.location.href);
-            url.searchParams.set('watch', id);
-            shareUrlInput.value = url.toString();
-            
-            shareSection.classList.remove('hidden');
-            document.getElementById('videoContainer').classList.add('border-red-500', 'pulse-live');
-        }
-
-        function resetUI() {
-            updateStatus('Offline', 'gray');
-            startBtn.disabled = false;
-            startBtn.innerHTML = '<i class="fa-solid fa-signal"></i> Start Broadcasting';
-            startBtn.classList.remove('animate-pulse');
-            stopBtn.disabled = true;
-            shareSection.classList.add('hidden');
-            
-            mainVideo.srcObject = null;
-            placeholder.classList.remove('hidden');
-            videoOverlay.classList.add('hidden');
-            fullscreenBtn.classList.add('hidden');
-            document.getElementById('videoContainer').classList.remove('border-red-500', 'pulse-live');
-            viewerCountEl.innerText = '0';
+            }, 1000);
         }
 
         function updateStatus(text, color) {
-            statusText.innerText = text;
-            statusDot.className = `w-2 h-2 rounded-full ${getColorClass(color)}`;
-            statusBadge.className = `flex items-center space-x-2 px-4 py-1.5 rounded-full text-xs font-bold border uppercase tracking-wider transition-colors ${getBadgeClass(color)}`;
+            const colors = {
+                'red': 'bg-red-900/20 text-red-500 border-red-900/30',
+                'green': 'bg-green-900/20 text-green-500 border-green-900/30',
+                'yellow': 'bg-yellow-900/20 text-yellow-500 border-yellow-900/30'
+            };
+            const dotColors = {
+                'red': 'bg-red-500',
+                'green': 'bg-green-500',
+                'yellow': 'bg-yellow-500'
+            };
+
+            statusIndicator.className = `flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${colors[color]}`;
+            statusIndicator.innerHTML = `
+                <div class="w-2 h-2 rounded-full ${dotColors[color]} ${color === 'green' || color === 'red' ? 'animate-pulse' : ''}"></div>
+                <span>${text}</span>
+            `;
         }
-
-        function getColorClass(color) {
-            if(color === 'red') return 'bg-red-500 animate-pulse';
-            if(color === 'green') return 'bg-green-500';
-            if(color === 'yellow') return 'bg-yellow-500 animate-pulse';
-            return 'bg-gray-500';
-        }
-
-        function getBadgeClass(color) {
-            if(color === 'red') return 'bg-red-900/30 text-red-400 border-red-900/50';
-            if(color === 'green') return 'bg-green-900/30 text-green-400 border-green-900/50';
-            if(color === 'yellow') return 'bg-yellow-900/30 text-yellow-400 border-yellow-900/50';
-            return 'bg-gray-800 text-gray-400 border-gray-700';
-        }
-
-        copyBtn.addEventListener('click', () => {
-            shareUrlInput.select();
-            document.execCommand('copy');
-            const originalIcon = copyBtn.innerHTML;
-            copyBtn.innerHTML = '<i class="fa-solid fa-check text-green-400"></i>';
-            setTimeout(() => copyBtn.innerHTML = originalIcon, 2000);
-        });
-
     </script>
 </body>
 </html>
