@@ -1,118 +1,102 @@
-# 🔥 ProStream OME: Low-Latency Broadcast Station
+# 🔥 GeminiStreamer: Low-Latency WebRTC Streaming
 
-ProStream OME is a high-performance, self-hosted streaming solution designed to deliver broadcast-quality video with **sub-second latency** using SRT and WebRTC.
+Self-hosted streaming solution for sharing gameplay/desktop with friends using **sub-second latency** WebRTC technology.
 
 ---
 
 ## 🏗 System Architecture
 
 ```
-[🖥️ Your Desktop] → [OBS Studio] → [RTMP/SRT] → [OvenMediaEngine Docker] → [SRT/WebRTC] → [Friend's VLC/Browser]
+[🖥️ Your Desktop] → [OBS Studio] → [RTMP] → [Mini PC: OvenMediaEngine] → [WebRTC] → [Friend's Browser]
+                                                                           ↓
+                                                                   [HTTP Server :8080]
 ```
 
-**Source (You)**: OBS Studio captures your screen and encodes it (H.264/HEVC/AV1)  
-**Server (Docker)**: OvenMediaEngine receives RTMP/SRT and distributes via SRT or WebRTC  
-**Client (Friends)**: VLC (SRT - best quality) or Browser (WebRTC - easiest)
+**Source**: OBS Studio captures screen and streams RTMP to mini PC  
+**Server**: OvenMediaEngine transcodes AAC→Opus and distributes via WebRTC  
+**Viewers**: Friends visit `http://YOUR_IP:8080` and watch in their browser
 
 ---
 
 ## 🚀 Quick Start
 
-### 1️⃣ Start the Server
+### 1️⃣ Configure Environment
+
+Copy `.env.example` to `.env` and add your IPs:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+```bash
+PUBLIC_IP=YOUR_PUBLIC_IP_HERE
+MINI_PC_IP=192.168.X.X
+```
+
+### 2️⃣ Start the Server
 
 ```bash
 docker-compose up -d
 ```
 
 This starts OvenMediaEngine with:
-- **RTMP Input** on port 1935 (for OBS)
-- **WebRTC Output** on port 3333 (for viewers)
-- **Media Ports** 10000-10010/UDP (for WebRTC connections)
+- **RTMP Input** on port 1935 (from OBS)
+- **WebRTC Output** on port 3333 (to browsers)
+- **Media Ports** 10000-10010/UDP (WebRTC ICE)
 
-### 2️⃣ Configure OBS Studio
+### 3️⃣ Start the Web Server
 
-1. Open **OBS Settings** → **Stream**
+```bash
+python server.py
+```
+
+The viewer page will be available at `http://YOUR_PUBLIC_IP:8080`
+
+### 4️⃣ Configure OBS Studio
+
+On your **main PC**, stream to the **mini PC's local IP**:
+
+1. **Settings** → **Stream**
    - Service: `Custom...`
-   - Server: `rtmp://localhost:1935/app`
+   - Server: `rtmp://MINI_PC_IP:1935/app` (e.g., `rtmp://192.168.1.99:1935/app`)
    - Stream Key: `stream`
 
-2. Open **Settings** → **Output** (Advanced mode)
-   - **Encoder**: NVIDIA NVENC H.264 (or AV1 if supported)
+2. **Settings** → **Output** → **Streaming**
+   - **Video Encoder**: NVIDIA NVENC H.264
    - **Rate Control**: CBR
-   - **Bitrate**: 6000-20000 Kbps (higher = better quality)
-   - **Keyframe Interval**: `1` ⚠️ **CRITICAL** - Don't use 0 or Auto!
-   - **Preset**: P1/P2 (Low Latency)
-   - **Tuning**: Ultra Low Latency
+   - **Bitrate**: 6000-10000 Kbps ⚠️ Lower than 20Mbps for multiple viewers!
+   - **Keyframe Interval**: `1` (1 second)
+   - **Preset**: Quality / Max Quality
+   - **Audio Encoder**: AAC (128 kbps)
 
-3. Click **Start Streaming** in OBS
+3. Click **Start Streaming**
 
-### 3️⃣ Share with Your Friends
+### 5️⃣ Share with Friends
 
-**Option A: VLC Player (⭐ Best Quality & Reliability)**
-
-Send them the `VIEWER_INSTRUCTIONS.md` file! It has simple step-by-step instructions.
-
-**Quick URL for VLC:**
+Send them this link:
 ```
-srt://104.6.177.38:9998?streamid=#default#app/stream
+http://YOUR_PUBLIC_IP:8080
 ```
 
-They just paste this in VLC → Media → Open Network Stream
-
----
-
-**Option B: Web Browser (Easiest)**
-
-**Simply send them the `index.html` file!**
-
-They just:
-1. Download the file
-2. Double-click to open it in their browser
-3. The player automatically connects to your stream
-4. Watch with sub-second latency! 🎉
+They just click it and watch - no downloads needed!
 
 ---
 
 ## 🌐 Network Setup
 
-### For Local Testing (Same Network)
-No port forwarding needed! Friends on your local network can connect using your local IP.
+### Port Forwarding (Required for Internet Streaming)
 
-### For Internet Streaming
-Forward these ports on your router to your PC's local IP:
+Forward these ports on your **router** to your **mini PC's local IP**:
 
-| Port Range | Protocol | Purpose |
-|------------|----------|---------|
-| 1935 | TCP | RTMP input from OBS |
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 1935 | TCP | RTMP input (OBS → Server) |
 | 3333 | TCP | WebRTC signaling |
-| 9998 | UDP | SRT output (to viewers) |
-| 9999 | UDP | SRT input (from OBS - optional) |
-| 10000-10010 | UDP | WebRTC media transport |
+| 8080 | TCP | Web server (viewer page) |
+| 10000-10010 | UDP | WebRTC media (ICE/DTLS) |
 
-**Find your public IP**: Visit [whatismyip.com](https://www.whatismyip.com)
-
----
-
-## � Customization
-
-### Change Your Public IP
-
-If your IP changes, update it in:
-
-**`docker-compose.yml`** (line 14):
-```yaml
-- OME_HOST_IP=YOUR_NEW_IP
-```
-
-**`index.html`** (line 138):
-```javascript
-hostInput.value = localStorage.getItem('ome_host') || 'YOUR_NEW_IP';
-```
-
-Then restart:
-```bash
-docker-compose restart
-```
+**Find your public IP**: `curl ifconfig.me` or visit [whatismyip.com](https://www.whatismyip.com)
 
 ---
 
@@ -120,66 +104,140 @@ docker-compose restart
 
 ```
 GeminiStreamer/
-├── docker-compose.yml       # Docker configuration
-├── index.html               # Web player (share this file!)
+├── .env                     # Your IP addresses (DO NOT COMMIT)
+├── .env.example             # Template for .env
+├── docker-compose.yml       # OvenMediaEngine container
+├── server.py                # HTTP server for viewer page
+├── requirements.txt         # Python dependencies
+├── index.html               # WebRTC player page
 ├── origin_conf/
-│   ├── Server.xml          # OvenMediaEngine config
-│   ├── server.crt          # SSL cert (for future use)
-│   └── server.key          # SSL key
+│   ├── Server.xml          # OME configuration
+│   ├── server.crt          # SSL cert (local only)
+│   └── server.key          # SSL key (local only)
+├── VIEWER_INSTRUCTIONS.md   # Simple guide for friends
 └── README.md
+```
+
+---
+
+## ⚙️ Configuration
+
+### Optimizing for Multiple Viewers
+
+If viewers report stuttering:
+
+1. **Lower OBS bitrate** to 6000-8000 Kbps
+2. **Reduce resolution** to 1920x1080 (if streaming ultrawide)
+3. **Drop to 30fps** if needed
+4. **Check mini PC CPU** - AAC→Opus transcoding is active per viewer
+
+### Changing Your Public IP
+
+If your IP changes, update `.env`:
+
+```bash
+PUBLIC_IP=NEW_IP_HERE
+```
+
+Then restart everything:
+```bash
+docker-compose restart
+# Stop server.py (Ctrl+C) and restart it
+python server.py
 ```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### ❌ Docker won't start
-**Error**: "docker daemon is not running"  
-**Fix**: Launch **Docker Desktop** and wait for it to fully start
+### ❌ OBS Can't Connect to Server
 
-### ❌ Stream won't connect
-**Symptoms**: Connection timeout, "failed to connect"  
-**Fix**:
-- Verify ports 3333 (TCP) and 10000-10010 (UDP) are forwarded
-- Check Windows Firewall allows these ports
-- Confirm OBS is streaming (should show green square)
-- Run: `docker logs prostream-engine` to check for errors
-
-### ❌ High latency (>2 seconds)
+**Error**: "Failed to connect to server"  
 **Fix**: 
-- Set OBS **Keyframe Interval** to exactly `1` (not 0, not auto)
-- Lower your OBS bitrate if network is slow
-- Check that UDP ports are open (WebRTC needs UDP)
+- Verify you're using mini PC's **local IP** (192.168.X.X), not public IP
+- Check server: `docker logs prostream-engine`
+- Confirm mini PC is on and Docker is running
 
-### ❌ Black screen / no video
+### ❌ Viewers Get Connection Timeout
+
+**Symptoms**: Browser shows "Retry X/5..."  
 **Fix**:
-- Verify OBS is actually streaming
-- Check browser console (F12) for errors
-- Ensure you're using the correct IP address
-- Try refreshing the player page
+- Verify ports 3333 TCP + 10000-10010 UDP are forwarded
+- Check firewall allows these ports
+- Confirm public IP is correct in `.env`
+- Try from different network to test
+
+### ❌ Stuttering with Multiple Viewers
+
+**Symptoms**: Video freezes, buffering  
+**Fix**:
+- **Lower OBS bitrate** to 6000-10000 Kbps (most important!)
+- Reduce resolution/framerate
+- Check mini PC CPU usage isn't at 100%
+- Verify upload speed is adequate (need ~10-15 Mbps per viewer)
+
+### ❌ No Audio
+
+**Error**: Logs show "Ignore unsupported codec (AAC)"  
+**Fix**: Already fixed! Server transcodes AAC→Opus automatically
+
+### ❌ Server Won't Start
+
+**Error**: "Port already in use"  
+**Fix**:
+```bash
+docker-compose down
+docker-compose up -d
+```
 
 ---
 
-## 💡 Tips
+## 💡 Performance Tips
 
-- **Best quality**: Use NVENC at 15-20 Mbps with keyframe=1s
-- **Mobile-friendly**: Lower bitrate to 3-6 Mbps for viewers on phones
-- **Multiple viewers**: OvenMediaEngine can handle dozens of simultaneous connections
-- **Bookmark the player**: Friends can save the local HTML file and reuse it
+### Recommended OBS Settings for Multiple Viewers
+- **Resolution**: 1920x1080 @ 60fps (or 30fps for lower bandwidth)
+- **Bitrate**: 6000-8000 Kbps (not 20000!)
+- **Encoder**: NVENC H.264
+- **Preset**: Quality
+- **Keyframe Interval**: 1 second
+- **Audio**: AAC 128kbps
+
+### Server Optimization
+- The server transcodes AAC→Opus for WebRTC compatibility
+- Each viewer gets a separate transcoded stream
+- Lower bitrate = less CPU load + more simultaneous viewers
 
 ---
 
 ## 📝 Requirements
 
-- **Docker Desktop** (Windows/Mac) or Docker Engine (Linux)
-- **OBS Studio** or any RTMP-capable encoder
-- **Modern web browser** (Chrome, Firefox, Edge, Safari)
-- **Port forwarding access** (for internet streaming)
+**Mini PC (Server):**
+- Docker Desktop or Docker Engine
+- Python 3.x with `python-dotenv`
+- Ports 1935, 3333, 8080 (TCP) and 10000-10010 (UDP) forwarded
+
+**Main PC (Streaming):**
+- OBS Studio or any RTMP encoder
+- Network access to mini PC
+
+**Viewers:**
+- Modern web browser (Chrome, Firefox, Edge, Safari)
+- Stable internet connection (5-10 Mbps recommended)
 
 ---
 
 ## 🌟 Built With
 
 - [OvenMediaEngine](https://github.com/AirenSoft/OvenMediaEngine) - Open-source WebRTC streaming server
-- [OvenPlayer](https://github.com/AirenSoft/OvenPlayer) - HTML5 WebRTC player
-- [Tailwind CSS](https://tailwindcss.com/) - Modern UI framework
+- [OvenPlayer](https://github.com/AirenSoft/OvenPlayer) - HTML5 WebRTC player  
+- [Tailwind CSS](https://tailwindcss.com/) - UI framework
+- Python SimpleHTTPServer - Lightweight web server
+
+---
+
+## 🔒 Security Notes
+
+- `.env` file contains your IP addresses - **never commit it to GitHub**
+- `.gitignore` is configured to exclude sensitive files
+- Self-signed SSL certificates are for local testing only
+- HTTP (not HTTPS) is used for simplicity - consider reverse proxy with Let's Encrypt for production
