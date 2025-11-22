@@ -227,12 +227,13 @@
                         <label class="block text-xs font-medium text-gray-400 mb-1">Optimization Mode</label>
                         <div class="relative">
                             <select id="streamModeSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
-                                <option value="motion" selected>Gaming (60fps Smoothness)</option>
+                                <option value="lossless" selected>Lossless (Raw)</option>
+                                <option value="motion">Gaming (Smoothed)</option>
                                 <option value="detail">Static (Text Clarity)</option>
                             </select>
                             <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
                         </div>
-                        <p class="text-[10px] text-gray-600 mt-1">Gaming prioritizes frame rate. Static prioritizes sharpness.</p>
+                        <p class="text-[10px] text-gray-600 mt-1">"Lossless" prevents downscaling. "Gaming" optimizes fps.</p>
                     </div>
 
                     <!-- Audio -->
@@ -259,7 +260,7 @@
                     <div class="bg-indigo-900/10 border border-indigo-900/30 p-3 rounded-lg">
                         <p class="text-[11px] text-indigo-300 leading-relaxed">
                             <i class="fa-solid fa-microchip mr-1"></i>
-                            <strong>AV1 Enabled:</strong> If your GPU supports it, we will attempt to use the AV1 codec for maximum quality at lower bitrates.
+                            <strong>AV1/VP9 Enabled:</strong> Logic prioritized for GPU hardware encoding.
                         </p>
                     </div>
                 </div>
@@ -514,7 +515,8 @@
                             }
 
                             // 3. Google-specific "Start Bitrate" hack to avoid slow ramp-up
-                            const minBitrate = Math.min(kbps, 5000); // 5Mbps min start
+                            // Increased min start bitrate to 30Mbps for high-speed connections
+                            const minBitrate = Math.min(kbps, 30000); // 30Mbps min start
                             sdp = sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\na=fmtp:96 x-google-min-bitrate=${minBitrate};x-google-max-bitrate=${kbps};x-google-start-bitrate=${minBitrate}\r\n`);
 
                             return sdp;
@@ -581,10 +583,15 @@
             
             // Video Constraints
             const videoConstraints = {
-                frameRate: { ideal: 60 }
+                frameRate: { ideal: 60 },
+                cursor: 'always' // Always show cursor
             };
+            
             if (targetHeight > 0) {
                 videoConstraints.height = { ideal: targetHeight };
+            } else {
+                // Native mode: Ensure no resizing happens
+                videoConstraints.resizeMode = "none";
             }
 
             // 1. Get Display Media (Video + System Audio)
@@ -603,7 +610,14 @@
             // Apply Content Hint (Motion vs Detail)
             const videoTrack = displayStream.getVideoTracks()[0];
             if ('contentHint' in videoTrack) {
-                videoTrack.contentHint = mode; // 'motion' or 'detail'
+                if (mode === 'lossless') {
+                    // For lossless, DO NOT use 'motion' as it causes resolution downscaling.
+                    // Use 'detail' to prioritize resolution, or simply don't set it.
+                    // We set 'detail' to be safe against blur.
+                    videoTrack.contentHint = 'detail';
+                } else {
+                    videoTrack.contentHint = mode; // 'motion' or 'detail'
+                }
             }
 
             const settings = videoTrack.getSettings();
