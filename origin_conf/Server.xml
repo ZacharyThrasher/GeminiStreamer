@@ -56,7 +56,10 @@
 							<OutputStreamName>${OriginStreamName}</OutputStreamName>
 							<Encodes>
 								<Audio>
-									<Bypass>true</Bypass>
+									<Codec>opus</Codec>
+									<Bitrate>128000</Bitrate>
+									<Samplerate>48000</Samplerate>
+									<Channel>2</Channel>
 								</Audio>
 								<Video>
 									<Bypass>true</Bypass>

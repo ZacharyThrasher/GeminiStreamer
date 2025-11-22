@@ -126,6 +126,9 @@
         const certLink = document.getElementById('certLink');
         
         let player = null;
+        let retryCount = 0;
+        let maxRetries = 3;
+        let retryTimeout = null;
 
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
@@ -158,14 +161,24 @@
 
             closeSettings();
             placeholder.classList.add('hidden');
+            
+            // Reset retry counter when user manually connects
+            retryCount = 0;
+            clearTimeout(retryTimeout);
+            
+            connectToStream(host, app, stream);
+        }
 
+        function connectToStream(host, app, stream) {
             // Detect if page is served via HTTPS (like GitHub Pages)
             const isSecure = window.location.protocol === 'https:';
             const protocol = isSecure ? 'wss://' : 'ws://';
             const port = isSecure ? '3334' : '3333';
 
             const url = `${protocol}${host}:${port}/${app}/${stream}`;
-            console.log("Connecting to:", url);
+            console.log(`Connection attempt ${retryCount + 1}/${maxRetries + 1}:`, url);
+            
+            updateStatus('Connecting...', 'yellow');
 
             // Show cert warning if using HTTPS/WSS
             if (isSecure) {
@@ -175,7 +188,10 @@
                 certWarning.classList.add('hidden');
             }
 
-            if (player) player.remove();
+            if (player) {
+                player.remove();
+                player = null;
+            }
 
             player = OvenPlayer.create('player', {
                 sources: [{ label: 'WebRTC', type: 'webrtc', file: url }],
@@ -185,15 +201,38 @@
             });
 
             player.on('ready', () => updateStatus('Ready', 'yellow'));
+            
             player.on('stateChanged', (data) => {
-                if (data.newstate === 'playing') updateStatus('Live', 'green');
-                else if (data.newstate === 'idle' || data.newstate === 'error') updateStatus('Offline', 'red');
+                if (data.newstate === 'playing') {
+                    updateStatus('Live', 'green');
+                    retryCount = 0; // Reset on successful connection
+                } else if (data.newstate === 'idle') {
+                    updateStatus('Idle', 'yellow');
+                } else if (data.newstate === 'error') {
+                    handleConnectionError(host, app, stream);
+                }
             });
 
             player.on('error', (error) => {
                 console.error("OvenPlayer Error:", error);
-                updateStatus('Error', 'red');
+                handleConnectionError(host, app, stream);
             });
+        }
+
+        function handleConnectionError(host, app, stream) {
+            if (retryCount < maxRetries) {
+                retryCount++;
+                const retryDelay = 2000; // 2 seconds
+                updateStatus(`Retry ${retryCount}/${maxRetries}...`, 'yellow');
+                console.log(`Retrying in ${retryDelay}ms...`);
+                
+                retryTimeout = setTimeout(() => {
+                    connectToStream(host, app, stream);
+                }, retryDelay);
+            } else {
+                updateStatus('Connection Failed', 'red');
+                console.error('Max retries reached. Please check your connection and try again.');
+            }
         }
 
         function updateStatus(text, color) {
