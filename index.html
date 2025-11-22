@@ -222,6 +222,19 @@
                         </div>
                     </div>
 
+                    <!-- Optimization Mode -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Optimization Mode</label>
+                        <div class="relative">
+                            <select id="streamModeSelect" class="w-full bg-gray-950 border border-gray-800 text-gray-300 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 appearance-none">
+                                <option value="motion" selected>Gaming (60fps Smoothness)</option>
+                                <option value="detail">Static (Text Clarity)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-gray-600 pointer-events-none"></i>
+                        </div>
+                        <p class="text-[10px] text-gray-600 mt-1">Gaming prioritizes frame rate. Static prioritizes sharpness.</p>
+                    </div>
+
                     <!-- Audio -->
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Audio Source</label>
@@ -238,15 +251,15 @@
                         
                         <!-- Audio Isolation Hint -->
                         <div class="mt-2 text-[10px] text-gray-500 leading-tight">
-                            <span class="text-yellow-500 font-bold">Want to exclude Discord?</span> 
-                            Sharing "Entire Screen" captures <span class="italic">all</span> audio. To exclude specific apps, share a specific <span class="text-white">Tab</span> or use a virtual audio cable.
+                            <span class="text-yellow-500 font-bold">Tip:</span> 
+                            System Audio filters (Echo Cancellation) are disabled for high fidelity game sound.
                         </div>
                     </div>
 
                     <div class="bg-indigo-900/10 border border-indigo-900/30 p-3 rounded-lg">
                         <p class="text-[11px] text-indigo-300 leading-relaxed">
                             <i class="fa-solid fa-microchip mr-1"></i>
-                            <strong>High Performance Mode:</strong> Your PC will transcode specific streams for each viewer based on their selection. High CPU/GPU usage expected.
+                            <strong>AV1 Enabled:</strong> If your GPU supports it, we will attempt to use the AV1 codec for maximum quality at lower bitrates.
                         </p>
                     </div>
                 </div>
@@ -310,8 +323,8 @@
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const mainVideo = document.getElementById('mainVideo');
-        const videoContainer = document.getElementById('videoContainer'); // Added for fullscreen
-        const fullscreenBtn = document.getElementById('fullscreenBtn');   // Added for fullscreen
+        const videoContainer = document.getElementById('videoContainer');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
         const placeholder = document.getElementById('placeholder');
         const controlPanel = document.getElementById('controlPanel');
         const viewerLobby = document.getElementById('viewerLobby');
@@ -328,6 +341,7 @@
         const micToggle = document.getElementById('micToggle');
         const bandwidthSelect = document.getElementById('bandwidthSelect');
         const resolutionSelect = document.getElementById('resolutionSelect');
+        const streamModeSelect = document.getElementById('streamModeSelect');
         const unmuteOverlayBtn = document.getElementById('unmuteOverlayBtn');
         
         // Slider elements
@@ -478,11 +492,12 @@
                     viewerBitrate = parseInt(bandwidthSelect.value);
                 }
 
-                // Advanced SDP Munging for High Bitrate
+                // Advanced SDP Munging for High Bitrate & AV1
                 const options = {
                     sdpTransform: (sdp) => {
                         try {
-                            // 1. Prioritize VP9 (Better compression for high res)
+                            // 1. Prioritize AV1, then VP9 (Better compression)
+                            sdp = setCodecPreference(sdp, 'AV1');
                             sdp = setCodecPreference(sdp, 'VP9');
 
                             // 2. Set Aggressive Bitrate Limits
@@ -499,8 +514,6 @@
                             }
 
                             // 3. Google-specific "Start Bitrate" hack to avoid slow ramp-up
-                            // This forces the browser to try sending high quality immediately
-                            // We find the video codec payload and add x-google parameters
                             const minBitrate = Math.min(kbps, 5000); // 5Mbps min start
                             sdp = sdp.replace(/a=mid:video\r\n/g, `a=mid:video\r\na=fmtp:96 x-google-min-bitrate=${minBitrate};x-google-max-bitrate=${kbps};x-google-start-bitrate=${minBitrate}\r\n`);
 
@@ -530,7 +543,7 @@
             });
         }
 
-        // Helper to reorder codecs in SDP to prefer VP9
+        // Helper to reorder codecs in SDP
         function setCodecPreference(sdp, codec) {
             const lines = sdp.split('\r\n');
             const mLineIndex = lines.findIndex(line => line.startsWith('m=video'));
@@ -564,34 +577,42 @@
 
         async function getMediaStream() {
             const targetHeight = parseInt(resolutionSelect.value);
+            const mode = streamModeSelect.value;
             
-            // Setup constraints
+            // Video Constraints
             const videoConstraints = {
                 frameRate: { ideal: 60 }
             };
-
-            // Only apply height constraint if specific resolution selected (not Native/0)
             if (targetHeight > 0) {
                 videoConstraints.height = { ideal: targetHeight };
             }
 
-            // Screen Capture Constraints
+            // 1. Get Display Media (Video + System Audio)
+            // We separate Audio constraints here for system audio
             const displayStream = await navigator.mediaDevices.getDisplayMedia({
                 video: videoConstraints,
-                audio: true 
+                audio: {
+                    // Crucial for Game Mode: Disable speech processing for system audio
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    channelCount: 2 // Force Stereo
+                }
             });
 
-            // Apply Content Hint if supported (Chrome/Edge)
+            // Apply Content Hint (Motion vs Detail)
             const videoTrack = displayStream.getVideoTracks()[0];
             if ('contentHint' in videoTrack) {
-                videoTrack.contentHint = 'detail'; 
+                videoTrack.contentHint = mode; // 'motion' or 'detail'
             }
 
             const settings = videoTrack.getSettings();
             if(settings.width) resDisplay.innerText = `${settings.width}x${settings.height}`;
 
+            // If mic is OFF, we are done.
             if (!micToggle.checked) return displayStream;
 
+            // If mic is ON, we need to mix.
             try {
                 const micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
@@ -604,11 +625,13 @@
                 audioContext = new AudioContext();
                 audioDestination = audioContext.createMediaStreamDestination();
 
+                // Add System Audio (Keep it clean/unprocessed)
                 if (displayStream.getAudioTracks().length > 0) {
                     const sysSource = audioContext.createMediaStreamSource(displayStream);
                     sysSource.connect(audioDestination);
                 }
 
+                // Add Mic Audio (This usually needs processing, which getUserMedia provides)
                 const micSource = audioContext.createMediaStreamSource(micStream);
                 const micGain = audioContext.createGain();
                 micGain.gain.value = 1.5; 
@@ -661,12 +684,18 @@
                 updateStatus('Live Signal', 'green');
                 
                 mainVideo.srcObject = remoteStream;
+                
+                // LOW LATENCY HACK: Force Playback immediately to reduce buffer
+                if (mainVideo.playoutDelayHint !== undefined) {
+                    mainVideo.playoutDelayHint = 0; 
+                }
+                
                 mainVideo.muted = true; 
                 unmuteOverlayBtn.classList.remove('hidden'); 
                 
                 placeholder.classList.add('hidden');
                 videoOverlay.classList.remove('hidden');
-                fullscreenBtn.classList.remove('hidden'); // Show fullscreen btn
+                fullscreenBtn.classList.remove('hidden'); 
 
                 const playPromise = mainVideo.play();
                 
