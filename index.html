@@ -141,7 +141,7 @@
                 initializePlayer();
             } else {
                 // Default to your public IP for easy testing
-                hostInput.value = localStorage.getItem('ome_host') || 'YOUR_PUBLIC_IP';
+                hostInput.value = localStorage.getItem('ome_host') || window.location.hostname || 'YOUR_PUBLIC_IP';
             }
         });
 
