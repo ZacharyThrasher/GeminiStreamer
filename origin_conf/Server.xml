@@ -10,12 +10,16 @@
 			<RTMP>
 				<Port>1935</Port>
 			</RTMP>
+			<SRT>
+				<Port>9999</Port>
+				<WorkerCount>2</WorkerCount>
+			</SRT>
 			<WebRTC>
 				<Signalling>
 					<Port>3333</Port>
 				</Signalling>
 				<IceCandidates>
-					<IceCandidate>*:10000/udp</IceCandidate>
+					<IceCandidate>*:10000-10010/udp</IceCandidate>
 				</IceCandidates>
 			</WebRTC>
 		</Providers>
@@ -28,8 +32,16 @@
 				</Signalling>
 				<IceCandidates>
 					<IceCandidate>${PublicIP}:10000-10010/udp</IceCandidate>
+					<TcpRelay>${PublicIP}:3478</TcpRelay>
+					<TcpForce>false</TcpForce>
+					<TcpRelayWorkerCount>1</TcpRelayWorkerCount>
 				</IceCandidates>
 			</WebRTC>
+			<LLHLS>
+				<Port>8085</Port>
+				<TLSPort>8445</TLSPort>
+				<WorkerCount>2</WorkerCount>
+			</LLHLS>
 		</Publishers>
 	</Bind>
 
@@ -44,6 +56,7 @@
 				<TLS>
 					<CertPath>/opt/ovenmediaengine/bin/origin_conf/server.crt</CertPath>
 					<KeyPath>/opt/ovenmediaengine/bin/origin_conf/server.key</KeyPath>
+					<ChainCertPath>/opt/ovenmediaengine/bin/origin_conf/server.crt</ChainCertPath>
 				</TLS>
 			</Host>
 
@@ -52,28 +65,101 @@
 					<Name>app</Name>
 					<Type>live</Type>
 					<OutputProfiles>
+						<HWAccels>
+							<Decoder>
+								<Enable>true</Enable>
+								<Modules>nv</Modules>
+							</Decoder>
+							<Encoder>
+								<Enable>true</Enable>
+								<Modules>nv</Modules>
+							</Encoder>
+						</HWAccels>
 						<OutputProfile>
-							<Name>bypass</Name>
+							<Name>max_quality_profile</Name>
 							<OutputStreamName>${OriginStreamName}</OutputStreamName>
 							<Encodes>
+								<Video>
+									<Name>source_4k</Name>
+									<Bypass>true</Bypass>
+								</Video>
 								<Audio>
+									<Name>opus</Name>
+									<Codec>opus</Codec>
+									<Bitrate>128000</Bitrate>
+									<Samplerate>48000</Samplerate>
+									<Channel>2</Channel>
+								</Audio>
+							</Encodes>
+							<Encodes>
+								<Video>
+									<Name>1080p60</Name>
+									<Codec>h264</Codec>
+									<Width>1920</Width>
+									<Height>1080</Height>
+									<Framerate>60</Framerate>
+									<Bitrate>8000000</Bitrate>
+									<KeyFrameInterval>60</KeyFrameInterval>
+									<Preset>p4</Preset>
+								</Video>
+								<Audio>
+									<Name>opus_1080</Name>
 									<Codec>opus</Codec>
 									<Bitrate>96000</Bitrate>
 									<Samplerate>48000</Samplerate>
 									<Channel>2</Channel>
 								</Audio>
+								<Audio>
+									<Name>aac_1080</Name>
+									<Codec>aac</Codec>
+									<Bitrate>128000</Bitrate>
+									<Samplerate>48000</Samplerate>
+									<Channel>2</Channel>
+								</Audio>
+							</Encodes>
+							<Encodes>
 								<Video>
-									<Bypass>true</Bypass>
+									<Name>720p30</Name>
+									<Codec>h264</Codec>
+									<Width>1280</Width>
+									<Height>720</Height>
+									<Framerate>30</Framerate>
+									<Bitrate>4000000</Bitrate>
+									<KeyFrameInterval>60</KeyFrameInterval>
+									<Preset>p4</Preset>
 								</Video>
+								<Audio>
+									<Name>opus_720</Name>
+									<Codec>opus</Codec>
+									<Bitrate>64000</Bitrate>
+									<Samplerate>48000</Samplerate>
+									<Channel>2</Channel>
+								</Audio>
+								<Audio>
+									<Name>aac_720</Name>
+									<Codec>aac</Codec>
+									<Bitrate>96000</Bitrate>
+									<Samplerate>48000</Samplerate>
+									<Channel>2</Channel>
+								</Audio>
 							</Encodes>
 						</OutputProfile>
 					</OutputProfiles>
 					<Providers>
+						<SRT />
 						<RTMP />
-						<WebRTC />
 					</Providers>
 					<Publishers>
-						<WebRTC />
+						<WebRTC>
+						</WebRTC>
+						<LLHLS>
+							<ChunkDuration>0.2</ChunkDuration>
+							<SegmentDuration>6</SegmentDuration>
+							<SegmentCount>10</SegmentCount>
+							<CrossDomains>
+								<Url>*</Url>
+							</CrossDomains>
+						</LLHLS>
 					</Publishers>
 				</Application>
 			</Applications>

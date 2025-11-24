@@ -96,7 +96,8 @@
             <div class="space-y-5">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Server Host (IP or Domain)</label>
-                    <input type="text" id="hostInput" placeholder="e.g., YOUR_PUBLIC_IP" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                    <input type="text" id="hostInput" placeholder="localhost or 104.6.177.38" class="w-full bg-[#0a0a0a] border border-[#333] text-white p-3 rounded-lg focus:border-indigo-500 focus:outline-none font-mono text-sm">
+                    <p class="text-xs text-gray-600 mt-1">Use 'localhost' when testing locally. Share http://104.6.177.38:8080 with friends.</p>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">App Name</label>
@@ -140,8 +141,10 @@
                 configModal.classList.add('hidden');
                 initializePlayer();
             } else {
-                // Default to your public IP for easy testing
-                hostInput.value = localStorage.getItem('ome_host') || window.location.hostname || 'YOUR_PUBLIC_IP';
+                // Auto-detect: use localhost if accessing locally, otherwise use page hostname
+                const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+                const defaultHost = isLocal ? 'localhost' : window.location.hostname;
+                hostInput.value = localStorage.getItem('ome_host') || defaultHost;
             }
         });
 
@@ -156,7 +159,8 @@
             if (!host) { alert("Please enter a Host IP."); return; }
             localStorage.setItem('ome_host', host);
             
-            const newUrl = `${window.location.pathname}?host=${host}&app=${app}&stream=${stream}`;
+            const search = new URLSearchParams({ host, app, stream });
+            const newUrl = `${window.location.pathname}?${search.toString()}`;
             window.history.pushState({path:newUrl},'',newUrl);
 
             closeSettings();
@@ -170,39 +174,40 @@
         }
 
         function connectToStream(host, app, stream) {
-            // Detect if page is served via HTTPS (like GitHub Pages)
-            const isSecure = window.location.protocol === 'https:';
-            const protocol = isSecure ? 'wss://' : 'ws://';
-            const port = isSecure ? '3334' : '3333';
-
-            const url = `${protocol}${host}:${port}/${app}/${stream}`;
-            console.log(`Connection attempt ${retryCount + 1}/${maxRetries + 1}:`, url);
+            const protocol = 'ws://';
+            const port = '3333';
+            const webrtcUrl = `${protocol}${host}:${port}/${app}/${stream}`;
             
+            console.log(`Connecting to: ${webrtcUrl}`);
             updateStatus('Connecting...', 'yellow');
 
-            // Show cert warning if using HTTPS/WSS
-            if (isSecure) {
-                certWarning.classList.remove('hidden');
-                certLink.href = `https://${host}:${port}`;
-            } else {
-                certWarning.classList.add('hidden');
-            }
-
             if (player) {
-                player.remove();
+                try {
+                    player.remove();
+                } catch(e) {
+                    console.warn('Error removing old player:', e);
+                }
                 player = null;
             }
 
-            player = OvenPlayer.create('player', {
-                sources: [{ label: 'WebRTC', type: 'webrtc', file: url }],
-                autoStart: true,
-                mute: true,
-                expandFullScreenUI: true,
-                webrtcConfig: {
-                    timeoutMaxRetry: 4,
-                    connectionTimeout: 10000
-                }
-            });
+            try {
+                player = OvenPlayer.create('player', {
+                    sources: [
+                        { type: 'webrtc', file: webrtcUrl }
+                    ],
+                    autoStart: true,
+                    mute: true,
+                    controls: true,
+                    webrtcConfig: {
+                        timeoutMaxRetry: 2,
+                        connectionTimeout: 10000
+                    }
+                });
+            } catch(e) {
+                console.error('Failed to create OvenPlayer:', e);
+                updateStatus('Player Error', 'red');
+                return;
+            }
 
             player.on('ready', () => updateStatus('Ready', 'yellow'));
             

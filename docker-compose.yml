@@ -7,12 +7,23 @@ services:
       - "1935:1935"       # RTMP In
       - "3333:3333"       # WebRTC HTTP
       - "3334:3334"       # WebRTC HTTPS (Secure)
+      - "3478:3478"       # TURN/TCP relay for WebRTC
+      - "8085:8085"       # LL-HLS HTTP
+      - "8445:8445"       # LL-HLS HTTPS
+      - "9999:9999/udp"   # SRT ingest
       - "10000-10010:10000-10010/udp" # ICE/Media
 
     environment:
       # OME needs to know your Public IP to put in the SDP handshake
       - OME_HOST_IP=${PUBLIC_IP}
       - OME_LOG_LEVEL=info
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
 
     volumes:
       # CRITICAL: This loads your Server.xml and Certs into the container
